@@ -1,0 +1,48 @@
+name: Permintaan fitur
+description: Jelaskan masalah pengguna dan perubahan yang bisa mengatasinya.
+title: "[Fitur]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Masalah yang mau diatasi
+      description: Tugas atau alur kerja apa yang sulit atau belum ada?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Usulan solusi
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatif yang dipertimbangkan
+      description: Opsional. Cara lain atau pendekatan lain apa yang sudah Anda coba?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Opsional; pilih yang paling dekat.
+      multiple: true
+      options:
+        - Baca PDF atau anotasi
+        - Perkakas PDF
+        - Dokumen Office atau lembar kerja
+        - Editor gambar atau pemindai
+        - Performa atau aksesibilitas
+        - Lainnya
+  - type: textarea
+    id: context
+    attributes:
+      label: Konteks tambahan
+      description: Sertakan contoh tampilan, contoh kasus, atau batasan bila berguna.
+  - type: checkboxes
+    id: prior_search
+    attributes:
+      label: Sebelum mengirim
+      options:
+        - label: Saya sudah memeriksa issue dan pull request yang ada untuk permintaan serupa.
+          required: true

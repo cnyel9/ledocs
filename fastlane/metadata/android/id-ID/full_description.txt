@@ -1,0 +1,23 @@
+LeDocs adalah pembaca dan penyunting PDF serta dokumen Office untuk Android. Gratis, tanpa iklan, tanpa akun, dan sepenuhnya offline: LeDocs tidak memiliki izin internet sama sekali, jadi dokumenmu tidak pernah meninggalkan ponselmu.
+
+Semua dalam satu tempat
+* PDF, catatan, daftar tugas, foto, dan memo suara tampil berdampingan sebagai kartu
+* Centang item daftar langsung di kartunya, putar memo suara di tempat
+* Saring menurut jenis, sematkan yang penting
+
+Alat PDF lengkap
+* Baca: gulir berkesinambungan atau satu halaman, Mode Baca, Mode Malam, pencarian, markah, bacakan dengan suara
+* Komentar: sorot, garis bawah, coret, gambar, komentar teks dan suara
+* Isi dan tanda tangani: kolom formulir, tanda tangan gambar, ketik, atau sertifikat digital
+* Sunting teks dan gambar, atur halaman, pangkas, kompres, gabung, pisah, lindungi dengan kata sandi
+* Pindai kertas dan kenali teksnya (OCR di perangkat), buat PDF dari foto atau teks
+
+Dokumen Office
+* Word (DOCX dan lainnya): baca dan sunting paragraf, simpan ke berbagai format termasuk PDF
+* Excel (XLSX dan lainnya): sunting sel dan rumus yang menghitung ulang, simpan atau ekspor ke PDF
+* PowerPoint (PPTX): tampilkan slide dan mode presentasi, ekspor ke PDF
+
+Pratinjau Cepat
+* "Buka dengan LeDocs" dari aplikasi chat atau pengelola berkas menampilkan berkas sebagai kartu melayang di atas aplikasi itu, seperti Quick Look di Android.
+
+Antarmuka sepenuhnya berbahasa Indonesia dengan latar gelap hitam yang nyaman di mata.

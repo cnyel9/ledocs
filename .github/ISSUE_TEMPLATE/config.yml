@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Laporkan celah keamanan secara privat
+    url: https://github.com/cnyel9/ledocs/security/advisories/new
+    about: Gunakan formulir pelaporan kerentanan privat GitHub. Jangan posting detail keamanan secara publik.

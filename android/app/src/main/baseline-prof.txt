@@ -1,0 +1,4 @@
+HSPLcom/ledocs/app/**->**(**)**
+Lcom/ledocs/app/**;
+HSPLcom/kyant/**->**(**)**
+Lcom/kyant/**;
