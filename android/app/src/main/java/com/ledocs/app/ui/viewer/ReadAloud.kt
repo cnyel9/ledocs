@@ -472,8 +472,8 @@ fun DrawScope.drawReadAloud(doc: OpenDocument, r: ReadAloud) {
             i += 4
         }
     }
-    mark(r.blockRects, Color(0xFFE9E9EE), 1f * density)
-    mark(r.wordRects, Color(0xFFFFFFFF), 1.5f * density)
+    mark(r.blockRects, Color(0xFFFFFFBB), 1f * density)
+    mark(r.wordRects, Color(0xFFF8D904), 1.5f * density)
 }
 
 /** The minimized read-aloud player: document, speed, live wave, skip, play/pause, and stop. */
@@ -519,7 +519,7 @@ fun BoxScope.ReadAloudBar(doc: OpenDocument, r: ReadAloud) {
                     GlassCircle(
                         onClick = { if (r.playing) r.pause() else r.play() },
                         size = 52.dp,
-                        tint = Color(0xFFD9D9DE),
+                        tint = Color(0xFF1683FF),
                         label = stringResource(if (r.playing) R.string.common_pause else if (r.finished) R.string.read_aloud_read_again else R.string.common_play),
                     ) { GlassIcon(if (r.playing) LucideIcons.Pause else LucideIcons.Play, null, Modifier.size(25.dp), tint = Color.White) }
                     SkipButton(back = false, size = 44.dp) { r.skip(true) }
@@ -527,7 +527,7 @@ fun BoxScope.ReadAloudBar(doc: OpenDocument, r: ReadAloud) {
                         GlassIcon(LucideIcons.Square, null, Modifier.size(16.dp))
                     }
                 }
-                r.problem?.let { Text(it, color = Color(0xFFF4F4F6), fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp)) }
+                r.problem?.let { Text(it, color = Color(0xFFFF625D), fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp)) }
             }
         }
     }
@@ -536,7 +536,7 @@ fun BoxScope.ReadAloudBar(doc: OpenDocument, r: ReadAloud) {
 /** Material 3 Expressive's animated wave, tinted to the player rather than the app theme. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun WavyProgressTrack(progress: Float, modifier: Modifier, accent: Color = Color(0xFFD9D9DE)) {
+private fun WavyProgressTrack(progress: Float, modifier: Modifier, accent: Color = Color(0xFF1683FF)) {
     val animatedProgress by animateFloatAsState(progress.coerceIn(0f, 1f), animationSpec = tween(360), label = "readAloudProgress")
     LinearWavyProgressIndicator(
         progress = { animatedProgress },

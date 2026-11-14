@@ -347,7 +347,8 @@ fun SheetViewer(vm: AppViewModel, doc: OpenDocument) {
     val eng = vm.engine ?: return
     val c = clear
     // The sheet is themed with the app; floating controls sample its actual pixels for contrast.
-    val chrome = rememberGlassInk(c.ink)
+    // LeDocs: chrome penampil selalu tinta putih di atas kaca hitamnya sendiri, tidak mengikuti warna halaman.
+    val chrome = remember(c.ink) { com.ledocs.app.ui.glass.InkProbe(Modifier, c.ink) }
     val grid = rememberSheetGrid(eng, doc.id)
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -422,7 +423,7 @@ fun SheetViewer(vm: AppViewModel, doc: OpenDocument) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     GlassCircle(onClick = { vm.closeDocument() }, label = stringResource(R.string.common_back)) { GlassIcon(LucideIcons.ChevronLeft, null, Modifier.size(22.dp)) }
                     Spacer(Modifier.size(10.dp))
-                    Column(Modifier.weight(1f).then(chrome.modifier).glassBar().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Column(Modifier.weight(1f).then(chrome.modifier).glassBar(surface = c.frost).padding(horizontal = 16.dp, vertical = 6.dp)) {
                         Text(doc.title, style = ClearType.BodyStrong, color = LocalGlassInk.current, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         grid.sheets.getOrNull(grid.current)?.let { Text(it.name + if (doc.info.dirty) " · " + stringResource(R.string.sheet_edited) else "", style = ClearType.Caption, color = LocalGlassInk.current.copy(alpha = 0.62f), maxLines = 1) }
                     }
@@ -468,7 +469,7 @@ fun SheetViewer(vm: AppViewModel, doc: OpenDocument) {
                                 .fillMaxHeight()
                                 .glassBar(
                                     shape = ChromeCapsule,
-                                    surface = if (notFound) Candy.Tomato.copy(alpha = 0.15f) else Color.Unspecified,
+                                    surface = if (notFound) Candy.Tomato.copy(alpha = 0.15f) else c.frost,
                                 )
                                 .padding(start = 14.dp, end = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -644,7 +645,7 @@ fun SheetViewer(vm: AppViewModel, doc: OpenDocument) {
                 ) {
                     val cell = grid.selected
                     Row(
-                        Modifier.weight(1f).fillMaxHeight().glassBar().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+                        Modifier.weight(1f).fillMaxHeight().glassBar(surface = c.frost).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (cell == null) {
@@ -781,7 +782,7 @@ private fun DrawScope.drawSheet(
                     val a = cell(r, col)
                     val b = cell(minOf(f.row1.toInt(), l.rows - 1), minOf(f.col1.toInt(), l.cols - 1))
                     val box = Rect(a.left, a.top, b.right, b.bottom)
-                    drawRect(Color(0xFFFFFFFF), box.topLeft, box.size, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f * density))
+                    drawRect(Color(0xFF0A84FF), box.topLeft, box.size, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f * density))
                 }
             }
             // the search hit in this region: an accent ring round its cell
@@ -791,7 +792,7 @@ private fun DrawScope.drawSheet(
                 if (r in r0 until r1 && col in c0 until c1) {
                     val box = cell(r, col)
                     drawRect(Color(0x330A84FF), box.topLeft, box.size)
-                    drawRect(Color(0xFFFFFFFF), box.topLeft, box.size, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f * density))
+                    drawRect(Color(0xFF0A84FF), box.topLeft, box.size, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f * density))
                 }
             }
             for (v in shown) {

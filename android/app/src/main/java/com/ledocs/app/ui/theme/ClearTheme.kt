@@ -25,12 +25,12 @@ import com.ledocs.app.ui.ThemeChoice
  * vivid buttons. Surfaces use the softer [CardTone]s instead.
  */
 object Candy {
-    val Tomato = Color(0xFFE9E9EE)
-    val Tangerine = Color(0xFFC9C9D1)
-    val Lemon = Color(0xFFF4F4F6)
-    val Lime = Color(0xFFB9B9C2)
-    val Mint = Color(0xFFD7D7DD)
-    val Sky = Color(0xFF8E8E96)
+    val Tomato = Color(0xFFFF5B4F)
+    val Tangerine = Color(0xFFFF9F0A)
+    val Lemon = Color(0xFFFFC21A)
+    val Lime = Color(0xFF34C759)
+    val Mint = Color(0xFF00BFB3)
+    val Sky = Color(0xFF0A84FF)
     val Grape = Color(0xFFA6A6AF)
     val Bubblegum = Color(0xFFDEDEE4)
 
