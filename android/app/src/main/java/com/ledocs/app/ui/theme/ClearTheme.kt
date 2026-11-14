@@ -25,19 +25,19 @@ import com.ledocs.app.ui.ThemeChoice
  * vivid buttons. Surfaces use the softer [CardTone]s instead.
  */
 object Candy {
-    val Tomato = Color(0xFFFF5B4F)
-    val Tangerine = Color(0xFFFF9F0A)
-    val Lemon = Color(0xFFFFC21A)
-    val Lime = Color(0xFF34C759)
-    val Mint = Color(0xFF00BFB3)
-    val Sky = Color(0xFF0A84FF)
-    val Grape = Color(0xFF5E5CE6)
-    val Bubblegum = Color(0xFFFF4F8B)
+    val Tomato = Color(0xFFE9E9EE)
+    val Tangerine = Color(0xFFC9C9D1)
+    val Lemon = Color(0xFFF4F4F6)
+    val Lime = Color(0xFFB9B9C2)
+    val Mint = Color(0xFFD7D7DD)
+    val Sky = Color(0xFF8E8E96)
+    val Grape = Color(0xFFA6A6AF)
+    val Bubblegum = Color(0xFFDEDEE4)
 
     /** The chosen chip's pastel lemon. */
-    val Chip = Color(0xFFEEF27E)
+    val Chip = Color(0xFFFFFFFF)
     /** A note's title blue. */
-    val InkBlue = Color(0xFF2C6DB5)
+    val InkBlue = Color(0xFF45454D)
 
     val All = listOf(Tomato, Tangerine, Lemon, Lime, Mint, Sky, Grape, Bubblegum)
 }
@@ -86,14 +86,14 @@ private val InkLight = Color(0xFF172033)
 private val InkDark = Color(0xFFF4F4F5)
 
 private val LightTones = mapOf(
-    Tone.Sage to CardTone(Color(0xFF8ED0C1), Color(0xFFB2DFD6), Color(0xFF12302B), Color(0xFF1B6E60)),
-    Tone.Paper to CardTone(Color(0xFFFFFFFF).copy(alpha = 0.88f), Color(0xFFF1F5FC).copy(alpha = 0.82f), InkLight, Candy.InkBlue),
-    Tone.Lavender to CardTone(Color(0xFF9FA5EA), Color(0xFFBABDF5), Color.White, Color.White),
-    Tone.Butter to CardTone(Color(0xFFEAE5BC), Color(0xFFF4F1DA), Color(0xFF3A3420), Color(0xFFB0862C)),
-    Tone.Orchid to CardTone(Color(0xFFE9C1EC), Color(0xFFD8AEE7), Color(0xFF3B1E3F), Color(0xFFC0258A)),
-    Tone.Blush to CardTone(Color(0xFFF5AFBF), Color(0xFFF7C3CF), Color(0xFF4A1824), Color(0xFFD23B5F)),
-    Tone.Sky to CardTone(Color(0xFFA8D0F5), Color(0xFFC9E3FA), Color(0xFF13304F), Color(0xFF1C6FD1)),
-    Tone.Peach to CardTone(Color(0xFFF8C6A3), Color(0xFFFBDCC5), Color(0xFF4A2512), Color(0xFFD9541C)),
+    Tone.Sage to CardTone(Color(0xFFF2F2F4), Color(0xFFE6E6EA), InkLight, Color(0xFF3F3F46)),
+    Tone.Paper to CardTone(Color(0xFFFFFFFF).copy(alpha = 0.88f), Color(0xFFF1F1F4).copy(alpha = 0.82f), InkLight, Color(0xFF3F3F46)),
+    Tone.Lavender to CardTone(Color(0xFFF2F2F4), Color(0xFFE6E6EA), InkLight, Color(0xFF3F3F46)),
+    Tone.Butter to CardTone(Color(0xFFF2F2F4), Color(0xFFE6E6EA), InkLight, Color(0xFF3F3F46)),
+    Tone.Orchid to CardTone(Color(0xFFF2F2F4), Color(0xFFE6E6EA), InkLight, Color(0xFF3F3F46)),
+    Tone.Blush to CardTone(Color(0xFFF2F2F4), Color(0xFFE6E6EA), InkLight, Color(0xFF3F3F46)),
+    Tone.Sky to CardTone(Color(0xFFF2F2F4), Color(0xFFE6E6EA), InkLight, Color(0xFF3F3F46)),
+    Tone.Peach to CardTone(Color(0xFFF2F2F4), Color(0xFFE6E6EA), InkLight, Color(0xFF3F3F46)),
 )
 
 /**
@@ -101,37 +101,37 @@ private val LightTones = mapOf(
  * pastels merely darkened turned muddy against the midnight wallpaper.)
  */
 private val DarkTones = mapOf(
-    Tone.Sage to CardTone(Color(0xFF22877A), Color(0xFF15605A), Color(0xFFEAFBF6), Color(0xFF7CE3CF)),
-    Tone.Paper to CardTone(Color(0xFFCBD5FF).copy(alpha = 0.16f), Color(0xFFCBD5FF).copy(alpha = 0.09f), InkDark, Color(0xFF9DB8FF)),
-    Tone.Lavender to CardTone(Color(0xFF5B4FD6), Color(0xFF3F34A6), Color.White, Color(0xFFD9D4FF)),
-    Tone.Butter to CardTone(Color(0xFFB38A1F), Color(0xFF7C5C12), Color(0xFFFFF6DA), Color(0xFFFFD66B)),
-    Tone.Orchid to CardTone(Color(0xFF9A3FB5), Color(0xFF66257F), Color(0xFFFBE9FF), Color(0xFFF0A6FF)),
-    Tone.Blush to CardTone(Color(0xFFC7415F), Color(0xFF8F2644), Color(0xFFFFE9EE), Color(0xFFFF9DB5)),
-    Tone.Sky to CardTone(Color(0xFF2D79D6), Color(0xFF1A4FA0), Color(0xFFE8F3FF), Color(0xFF9CCBFF)),
-    Tone.Peach to CardTone(Color(0xFFD2723B), Color(0xFF9C4A22), Color(0xFFFFF0E4), Color(0xFFFFBE91)),
+    Tone.Sage to CardTone(Color(0xFF1E1E22), Color(0xFF111113), InkDark, Color.White),
+    Tone.Paper to CardTone(Color(0xFF1E1E22), Color(0xFF111113), InkDark, Color.White),
+    Tone.Lavender to CardTone(Color(0xFF1E1E22), Color(0xFF111113), InkDark, Color.White),
+    Tone.Butter to CardTone(Color(0xFF1E1E22), Color(0xFF111113), InkDark, Color.White),
+    Tone.Orchid to CardTone(Color(0xFF1E1E22), Color(0xFF111113), InkDark, Color.White),
+    Tone.Blush to CardTone(Color(0xFF1E1E22), Color(0xFF111113), InkDark, Color.White),
+    Tone.Sky to CardTone(Color(0xFF1E1E22), Color(0xFF111113), InkDark, Color.White),
+    Tone.Peach to CardTone(Color(0xFF1E1E22), Color(0xFF111113), InkDark, Color.White),
 )
 
 val LightClear = ClearColors(
     dark = false,
-    wall = listOf(Color(0xFF9AB4DC), Color(0xFFB3C5E8), Color(0xFFA8BEE3)),
+    wall = listOf(Color(0xFFD9D9DE), Color(0xFFE4E4E8), Color(0xFFD2D2D8)),
     blooms = listOf(
-        Color(0xFFCDF2F3) to 0.62f,
-        Color(0xFFD9C3F4) to 0.58f,
-        Color(0xFFF7BEDD) to 0.36f,
-        Color(0xFF8AA4D7) to 0.42f,
+        Color(0xFFFFFFFF) to 0.62f,
+        Color(0xFFEDEDF0) to 0.58f,
+        Color(0xFFE2E2E7) to 0.36f,
+        Color(0xFFC9C9D1) to 0.42f,
         Color(0xFFFFFFFF) to 0.20f,
     ),
     hero = Color.White,
-    heroGlow = Color(0xFF3A527E).copy(alpha = 0.22f),
+    heroGlow = Color(0xFF3F3F46).copy(alpha = 0.22f),
     ink = InkLight,
     inkSoft = InkLight.copy(alpha = 0.64f),
     inkFaint = InkLight.copy(alpha = 0.40f),
     line = InkLight.copy(alpha = 0.08f),
     glass = Color.White.copy(alpha = 0.26f),
     rim = Color.White.copy(alpha = 0.70f),
-    frost = Color(0xFFF3F6FC).copy(alpha = 0.82f),
-    desk = Color(0xFFDCE3EE),
-    capsule = Color(0xFF26324A).copy(alpha = 0.34f),
+    frost = Color(0xFFF4F4F6).copy(alpha = 0.82f),
+    desk = Color(0xFFE7E7EB),
+    capsule = Color(0xFF101014).copy(alpha = 0.34f),
     tones = LightTones,
 )
 

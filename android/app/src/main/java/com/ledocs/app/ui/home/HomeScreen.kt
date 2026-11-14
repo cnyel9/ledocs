@@ -403,9 +403,9 @@ fun DeskChip(label: String, chosen: Boolean, onClick: () -> Unit) {
         fill = { Candy.Chip.copy(alpha = 0.94f * lit) },
         contentPadding = PaddingValues(horizontal = 22.dp),
         tap = com.ledocs.app.ui.glass.Feel.Tick,
-        ink = if (chosen) Color(0xFF1C2433) else c.ink,
+        ink = if (chosen) Color(0xFF101012) else c.ink,
     ) {
-        Text(label, style = ClearType.Body.copy(fontSize = 16.sp), color = if (chosen) Color(0xFF1C2433) else c.ink)
+        Text(label, style = ClearType.Body.copy(fontSize = 16.sp), color = if (chosen) Color(0xFF101012) else c.ink)
     }
 }
 

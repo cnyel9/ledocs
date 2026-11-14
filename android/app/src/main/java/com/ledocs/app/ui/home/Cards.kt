@@ -332,7 +332,7 @@ fun VoiceCard(note: Note, playing: Boolean, progress: () -> Float, onPlay: () ->
 }
 
 /** The voice card's own periwinkle (the mock's: bluer on the left, lighter to the right). */
-private val VoiceTone = CardTone(Color(0xFFA3AAF0), Color(0xFFC2C5F7), Color.White, Color.White)
+private val VoiceTone = CardTone(Color(0xFF1E1E22), Color(0xFF111113), Color.White, Color.White)
 
 @Composable
 private fun Modifier.voicePaint(tone: CardTone): Modifier {
@@ -340,8 +340,8 @@ private fun Modifier.voicePaint(tone: CardTone): Modifier {
     return clip(CardShape)
         .drawBehind {
             // at night the periwinkle becomes a vivid violet: darkening it only muddied it
-            val top = if (dark) Color(0xFF6258E6) else tone.top
-            val bottom = if (dark) Color(0xFF8B74F2) else tone.bottom
+            val top = tone.top
+            val bottom = tone.bottom
             drawRect(Brush.linearGradient(listOf(top, bottom), Offset.Zero, Offset(size.width, size.height * 0.6f)))
             drawCircle(
                 Brush.radialGradient(listOf(Color.White.copy(alpha = if (dark) 0.08f else 0.22f), Color.Transparent), Offset(size.width * 0.5f, size.height * 0.62f), size.minDimension * 0.9f),

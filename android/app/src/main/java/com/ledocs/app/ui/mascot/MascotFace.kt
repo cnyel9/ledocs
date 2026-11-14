@@ -113,9 +113,9 @@ internal fun lerpFace(a: Face, b: Face, t: Float): Face = Face(
  */
 internal fun inkFor(body: Color): Color = if (body.luminance() < 0.06f) Color(0xFFF8F8FA) else Color(0xFF15161A)
 
-private val BLUSH = Color(0xFFFF7096)
-private val TONGUE = Color(0xFFFF7D93)
-private val TEAR = Color(0xFF7CCBFF)
+private val BLUSH = Color(0xFFD9D9DE)
+private val TONGUE = Color(0xFFC9C9D1)
+private val TEAR = Color(0xFFE9E9EE)
 private const val DEG = 180f / PI.toFloat()
 
 private fun c01(v: Float) = v.coerceIn(0f, 1f)
@@ -144,7 +144,7 @@ internal fun DrawScope.drawFace(
   val cy = shape.faceY - 3f + lookY
   val darkInk = ink.luminance() < 0.5f
   val hi = if (darkInk) Color.White else Color(0xFF1E1A33).copy(alpha = 0.55f)
-  val mouthFill = if (darkInk) Color(0xFF4A1A33) else ink
+  val mouthFill = if (darkInk) Color(0xFF2A2A2E) else ink
 
   // "Hey, over here": two quick raises at the start of each 2.6 s cycle.
   fun bump(p: Float) = if (p >= 0f && p < 0.077f) sin(PI.toFloat() * p / 0.077f) else 0f

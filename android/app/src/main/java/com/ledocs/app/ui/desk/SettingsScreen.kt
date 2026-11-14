@@ -465,8 +465,8 @@ private fun WallpaperPicker(context: android.content.Context) {
                             }
                         else -> Box(Modifier.fillMaxSize().drawBehind {
                             drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(if (c.dark) listOf(Color(0xFF231A3D), Color(0xFF15122A)) else listOf(Color(0xFFDCD8F6), Color(0xFFC9C4EE))))
-                            drawCircle(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFFB36BFF).copy(alpha = 0.55f), Color.Transparent), androidx.compose.ui.geometry.Offset(size.width * 0.8f, size.height * 0.2f), size.width * 0.7f), size.width * 0.7f, androidx.compose.ui.geometry.Offset(size.width * 0.8f, size.height * 0.2f))
-                            drawCircle(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF5AA9FF).copy(alpha = 0.45f), Color.Transparent), androidx.compose.ui.geometry.Offset(size.width * 0.15f, size.height * 0.85f), size.width * 0.7f), size.width * 0.7f, androidx.compose.ui.geometry.Offset(size.width * 0.15f, size.height * 0.85f))
+                            drawCircle(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color.White.copy(alpha = 0.20f), Color.Transparent), androidx.compose.ui.geometry.Offset(size.width * 0.8f, size.height * 0.2f), size.width * 0.7f), size.width * 0.7f, androidx.compose.ui.geometry.Offset(size.width * 0.8f, size.height * 0.2f))
+                            drawCircle(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color.White.copy(alpha = 0.14f), Color.Transparent), androidx.compose.ui.geometry.Offset(size.width * 0.15f, size.height * 0.85f), size.width * 0.7f), size.width * 0.7f, androidx.compose.ui.geometry.Offset(size.width * 0.15f, size.height * 0.85f))
                         })
                     }
                     if (on) Box(
@@ -491,15 +491,15 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeDesk(choic
         val sky = if (dark) listOf(Color(0xFF231A3D), Color(0xFF15122A)) else listOf(Color(0xFFDCD8F6), Color(0xFFC9C4EE))
         drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(sky))
         drawCircle(
-            androidx.compose.ui.graphics.Brush.radialGradient(listOf((if (dark) Color(0xFF7B4DDB) else Color(0xFFF2B8E4)).copy(alpha = 0.7f), Color.Transparent), androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.15f), size.width * 0.8f),
+            androidx.compose.ui.graphics.Brush.radialGradient(listOf((if (dark) Color.White else Color(0xFFD9D9DE)).copy(alpha = 0.7f), Color.Transparent), androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.15f), size.width * 0.8f),
             size.width * 0.8f, androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.15f),
         )
         val ink = if (dark) Color.White else Color(0xFF1C1733)
         val w = size.width
         val h = size.height
         drawRoundRect(ink.copy(alpha = 0.85f), androidx.compose.ui.geometry.Offset(w * 0.12f, h * 0.12f), androidx.compose.ui.geometry.Size(w * 0.5f, h * 0.06f), androidx.compose.ui.geometry.CornerRadius(h * 0.03f))
-        val card1 = if (dark) Color(0xFF3B6E5A) else Color(0xFFBFE8D2)
-        val card2 = if (dark) Color(0xFF4A3F86) else Color(0xFFFFFFFF)
+        val card1 = if (dark) Color(0xFF1E1E22) else Color(0xFFE9E9EE)
+        val card2 = if (dark) Color(0xFF26262B) else Color(0xFFFFFFFF)
         drawRoundRect(card1, androidx.compose.ui.geometry.Offset(w * 0.1f, h * 0.27f), androidx.compose.ui.geometry.Size(w * 0.38f, h * 0.4f), androidx.compose.ui.geometry.CornerRadius(w * 0.08f))
         drawRoundRect(card2, androidx.compose.ui.geometry.Offset(w * 0.52f, h * 0.27f), androidx.compose.ui.geometry.Size(w * 0.38f, h * 0.3f), androidx.compose.ui.geometry.CornerRadius(w * 0.08f))
         drawRoundRect(ink.copy(alpha = if (dark) 0.22f else 0.12f), androidx.compose.ui.geometry.Offset(w * 0.3f, h * 0.8f), androidx.compose.ui.geometry.Size(w * 0.4f, h * 0.1f), androidx.compose.ui.geometry.CornerRadius(h * 0.05f))
@@ -519,7 +519,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeDesk(choic
 /** A setting's icon: a small solid tile with a white glyph, as grouped settings draw them. */
 @Composable
 private fun SettingIcon(icon: ImageVector, accent: Color) {
-    Box(Modifier.size(30.dp).clip(RoundedRectangle(8.dp)).background(accent), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(30.dp).clip(RoundedRectangle(8.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.14f), RoundedRectangle(8.dp)), contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(17.dp))
     }
 }

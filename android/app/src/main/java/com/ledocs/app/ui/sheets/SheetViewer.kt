@@ -781,7 +781,7 @@ private fun DrawScope.drawSheet(
                     val a = cell(r, col)
                     val b = cell(minOf(f.row1.toInt(), l.rows - 1), minOf(f.col1.toInt(), l.cols - 1))
                     val box = Rect(a.left, a.top, b.right, b.bottom)
-                    drawRect(Color(0xFF0A84FF), box.topLeft, box.size, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f * density))
+                    drawRect(Color(0xFFFFFFFF), box.topLeft, box.size, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f * density))
                 }
             }
             // the search hit in this region: an accent ring round its cell
@@ -791,7 +791,7 @@ private fun DrawScope.drawSheet(
                 if (r in r0 until r1 && col in c0 until c1) {
                     val box = cell(r, col)
                     drawRect(Color(0x330A84FF), box.topLeft, box.size)
-                    drawRect(Color(0xFF0A84FF), box.topLeft, box.size, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f * density))
+                    drawRect(Color(0xFFFFFFFF), box.topLeft, box.size, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f * density))
                 }
             }
             for (v in shown) {

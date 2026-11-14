@@ -482,21 +482,21 @@ internal fun tileBackground(tint: Color, dark: Boolean): Color =
 
 /** The tool colours of More tools and the Tools tab (each tool its own hue). */
 object ToolHues {
-    val combine = Color(0xFF8F8CF5)
-    val compress = Color(0xFF3CC8C2)
-    val protect = Color(0xFF8F8CF5)
-    val organize = Color(0xFF9FD848)
-    val crop = Color(0xFF6E9BF2)
-    val ocr = Color(0xFF5BCB6B)
-    val create = Color(0xFFF2615C)
-    val text = Color(0xFFF2A93B)
-    val scan = Color(0xFF3CC8C2)
-    val read = Color(0xFF6E9BF2)
-    val edit = Color(0xFFEC5BA6)
-    val export = Color(0xFFF2615C)
-    val sign = Color(0xFF9B7CF2)
-    val comment = Color(0xFFF2A93B)
-    val redact = Color(0xFFF2615C)
+    val combine = Color(0xFFB9B9C2)
+    val compress = Color(0xFFD1D1D7)
+    val protect = Color(0xFFB9B9C2)
+    val organize = Color(0xFFE3E3E8)
+    val crop = Color(0xFFC9C9D1)
+    val ocr = Color(0xFFD9D9DE)
+    val create = Color(0xFFE9E9EE)
+    val text = Color(0xFFDEDEE4)
+    val scan = Color(0xFFD1D1D7)
+    val read = Color(0xFFC9C9D1)
+    val edit = Color(0xFFEDEDF0)
+    val export = Color(0xFFE9E9EE)
+    val sign = Color(0xFFAFAFB7)
+    val comment = Color(0xFFDEDEE4)
+    val redact = Color(0xFFE9E9EE)
 }
 
 /** More tools: the tools that aren't on the bar, as a grid of tiles, and Customize toolbar. */

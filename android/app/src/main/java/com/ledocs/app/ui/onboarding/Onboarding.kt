@@ -330,7 +330,7 @@ private fun Hello(sway: () -> Float, idle: State<Boolean>) {
             NotePaper(Modifier.align(Alignment.TopStart).padding(start = 20.dp).width(186.dp).flyIn(-7f, Offset(-200f, 60f), 120, sway))
             Box(
                 Modifier.align(Alignment.TopEnd).padding(end = 20.dp, top = 46.dp).size(148.dp, 184.dp).flyIn(6f, Offset(220f, 40f), 220, sway)
-                    .clip(CardShape).background(Brush.linearGradient(listOf(Color(0xFF8EC5FC), Color(0xFFE0C3FC), Color(0xFFF9C6D3)))),
+                    .clip(CardShape).background(Brush.linearGradient(listOf(Color(0xFF3A3A40), Color(0xFF26262B), Color(0xFF1A1A1D)))),
             ) {
                 PagedMascot("flower", MascotMood.Happy, 92.dp, idle, Modifier.align(Alignment.Center))
                 Text(stringResource(R.string.welcome_card_highlights), style = ClearType.Title.copy(fontSize = 15.sp), color = Color.White, modifier = Modifier.padding(14.dp))

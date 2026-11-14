@@ -282,7 +282,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassSwatch(i: 
     drawCircle(fill, r, center)
     if (i == 2) {
         drawCircle(
-            androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color(0xFFFF6B9A), Color(0xFFFFD84D), Color(0xFF5BE3B0), Color(0xFF5AA9FF), Color(0xFFB36BFF), Color(0xFFFF6B9A)), center),
+            androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color(0xFFFFFFFF), Color(0xFFD9D9DE), Color(0xFFB9B9C2), Color(0xFF8E8E96), Color(0xFFC9C9D1), Color(0xFFFFFFFF)), center),
             r, center, style = androidx.compose.ui.graphics.drawscope.Stroke(2.5.dp.toPx()),
         )
     } else if (rim > 0f) {
@@ -292,7 +292,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassSwatch(i: 
 
 /** A motion preset in miniature: its spring's swing from start to rest. */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSpringSwatch(bounce: Float) {
-    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF2A2350), Color(0xFF1A1636))))
+    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF26262B), Color(0xFF131315))))
     val damping = (1f - bounce).coerceIn(0.12f, 1f)
     val w = size.width
     val h = size.height

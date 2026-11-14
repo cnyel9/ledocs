@@ -65,9 +65,9 @@ enum class MascotMood { Idle, Thinking, Working, NeedsYou, Happy, Sad, Sleeping 
 /** What a mascot does to the phone when it hops (the app plays a haptic). */
 val LocalMascotHop = staticCompositionLocalOf<() -> Unit> { {} }
 
-private val SPARKLE = Color(0xFFFFD24A)
-private val SPARKLE_COOL = Color(0xFF7FD8FF)
-private val SWEAT = Color(0xFF7CC4F5)
+private val SPARKLE = Color(0xFFFFFFFF)
+private val SPARKLE_COOL = Color(0xFFD9D9DE)
+private val SWEAT = Color(0xFFC9C9D1)
 
 /**
  * A living bot: breathes, blinks, glances around, tilts its head toward where
