@@ -53,8 +53,11 @@ object AiPresets {
 class AiStore(context: Context) {
     private val prefs = context.getSharedPreferences("ai", Context.MODE_PRIVATE)
 
-    var enabled by mutableStateOf(prefs.getBoolean("enabled", false))
-        private set
+    // Bukan properti terdelegasi: setter bawaannya akan bentrok signature JVM dengan
+    // fun setEnabled(Boolean) di bawah. Getter khusus membaca state, jadi komposisi tetap
+    // berlangganan perubahan nilainya.
+    private val enabledState = mutableStateOf(prefs.getBoolean("enabled", false))
+    val enabled: Boolean get() = enabledState.value
     val providers = mutableStateListOf<AiProvider>()
     var activeId by mutableStateOf(prefs.getString("activeId", null))
         private set
@@ -86,7 +89,7 @@ class AiStore(context: Context) {
     val active: AiProvider? get() = providers.firstOrNull { it.id == activeId } ?: providers.firstOrNull()
 
     fun setEnabled(on: Boolean) {
-        enabled = on
+        enabledState.value = on
         prefs.edit().putBoolean("enabled", on).apply()
     }
 
@@ -217,7 +220,7 @@ class AiStore(context: Context) {
     fun wipeAll() {
         providers.clear()
         activeId = null
-        enabled = false
+        enabledState.value = false
         prefs.edit().clear().apply()
     }
 }

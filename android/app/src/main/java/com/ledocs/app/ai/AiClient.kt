@@ -147,7 +147,7 @@ class AiClient {
         fun validateBaseUrl(raw: String): String? {
             val url = runCatching { URL(raw.trim()) }.getOrNull() ?: return null
             if (!url.userInfo.isNullOrEmpty()) return null
-            val host = url.host?.lowercase() ?: return null
+            val host = url.host?.lowercase()?.removeSurrounding("[", "]") ?: return null
             val loopback = host == "localhost" || host == "127.0.0.1" || host == "::1"
             val ok = url.protocol == "https" || (url.protocol == "http" && loopback)
             if (!ok) return null
@@ -156,7 +156,7 @@ class AiClient {
 
         /** True bila base URL menunjuk server di perangkat sendiri (tidak butuh internet). */
         fun isLoopback(raw: String): Boolean {
-            val host = runCatching { URL(raw.trim()).host?.lowercase() }.getOrNull() ?: return false
+            val host = runCatching { URL(raw.trim()).host?.lowercase()?.removeSurrounding("[", "]") }.getOrNull() ?: return false
             return host == "localhost" || host == "127.0.0.1" || host == "::1"
         }
     }
