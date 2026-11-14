@@ -103,9 +103,9 @@ jobs:
         working-directory: android
         env:
           VERSION: ${{ steps.v.outputs.version }}
-          LEDOCS_UPLOAD_STORE_PASSWORD: <redacted>
+          LEDOCS_UPLOAD_STORE_PASSWORD: ${{ secrets.LEDOCS_UPLOAD_STORE_PASSWORD }}
           LEDOCS_UPLOAD_KEY_ALIAS: ${{ secrets.LEDOCS_UPLOAD_KEY_ALIAS }}
-          LEDOCS_UPLOAD_KEY_PASSWORD: <redacted>
+          LEDOCS_UPLOAD_KEY_PASSWORD: ${{ secrets.LEDOCS_UPLOAD_KEY_PASSWORD }}
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
           gradle assembleRelease "-Pledocs.abis=arm64-v8a,armeabi-v7a" "-Pledocs.version=$VERSION" --no-daemon --no-configuration-cache
