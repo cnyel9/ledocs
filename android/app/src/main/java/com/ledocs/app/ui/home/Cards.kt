@@ -169,12 +169,13 @@ fun ListCard(note: Note, onOpen: () -> Unit, onLong: () -> Unit, onToggle: (Chec
  * never split across lines (lines break between words only).
  */
 @Composable
-fun WordFitText(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, maxLines: Int = 2, minScale: Float = 0.5f) {
+fun WordFitText(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, maxLines: Int = 2, minScale: Float = 0.5f, fitWholeLine: Boolean = false) {
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     BoxWithConstraints(modifier) {
         val room = constraints.maxWidth
         val scale = remember(text, style, room) {
-            val widest = text.split(' ', '\n').filter { it.isNotBlank() }
+            val widest = if (fitWholeLine) measurer.measure(text, style, softWrap = false, maxLines = 1).size.width
+                else text.split(' ', '\n').filter { it.isNotBlank() }
                 .maxOfOrNull { measurer.measure(it, style, softWrap = false, maxLines = 1).size.width } ?: 0
             if (widest <= room || widest == 0) 1f else (room.toFloat() / widest * 0.98f).coerceAtLeast(minScale)
         }
@@ -218,7 +219,7 @@ fun CheckPill(item: CheckItem, tone: CardTone, onToggle: () -> Unit) {
             ) { Icon(LucideIcons.Check, null, tint = if (dark) tone.bottom else tone.ink, modifier = Modifier.size(14.dp)) }
         }
         Spacer(Modifier.width(10.dp))
-        Text(item.text, style = ClearType.Body.copy(fontSize = 14.5.sp), color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        WordFitText(item.text, ClearType.Body.copy(fontSize = 14.5.sp, color = ink), modifier = Modifier.weight(1f), maxLines = 1, minScale = 0.7f, fitWholeLine = true)
     }
 }
 
@@ -422,9 +423,9 @@ fun Waveform(levels: List<Float>, progress: () -> Float, modifier: Modifier, col
 fun CollectionCard(word: String, tone: CardTone, onOpen: () -> Unit, modifier: Modifier = Modifier, height: Dp = 150.dp, count: Int? = null) {
     Box(modifier.height(height).pressable(onOpen, pressedScale = 0.95f).cardPaint(tone, Offset(0.2f, 1.0f))) {
         Papers(Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 14.dp))
-        Text(
-            word, style = ClearType.SerifWord, color = tone.accent, maxLines = 1,
-            modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 10.dp),
+        WordFitText(
+            word, ClearType.SerifWord.copy(color = tone.accent), maxLines = 1, minScale = 0.4f, fitWholeLine = true,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, end = 16.dp, bottom = 10.dp).fillMaxWidth(),
         )
         if (count != null && count > 0) {
             Text(
