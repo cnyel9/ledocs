@@ -108,8 +108,9 @@ class AiSession(
         private set
     var currentChatId by mutableStateOf<String?>(null)
         private set
-    var style by mutableStateOf(AiStyle.Seimbang)
-        private set
+    // Tanpa setter sintetis: fun setStyle di bawah akan bentrok tanda tangan JVM dengannya.
+    private val styleState = mutableStateOf(AiStyle.Seimbang)
+    val style: AiStyle get() = styleState.value
     /** Ringkasan otomatis dokumen yang menempel (dibuat sekali, lalu disimpan). */
     var summary by mutableStateOf<String?>(null)
         private set
@@ -382,7 +383,7 @@ class AiSession(
 
     private fun loadChat(meta: AiChatMeta) {
         currentChatId = meta.id
-        style = AiStyle.of(meta.style)
+        styleState.value = AiStyle.of(meta.style)
         followUps.clear()
         loadChatEntries(meta.id)
     }
@@ -419,7 +420,7 @@ class AiSession(
 
     fun setStyle(newStyle: AiStyle) {
         if (style == newStyle) return
-        style = newStyle
+        styleState.value = newStyle
         refreshSystemPrompt()
         currentMeta()?.let {
             it.style = newStyle.id
