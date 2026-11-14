@@ -72,6 +72,12 @@ fun AiSettingsPage(vm: AppViewModel, onBack: () -> Unit) {
             item { Section(stringResource(R.string.ai_providers_row)) }
             item {
                 Panel {
+                    // Label lencana diambil dulu di konteks composable: stringResource tidak
+                    // boleh dipanggil dari dalam lambda joinToString/buildString.
+                    val capTeks = stringResource(R.string.ai_cap_teks)
+                    val capGambar = stringResource(R.string.ai_cap_gambar)
+                    val capBerpikir = stringResource(R.string.ai_cap_berpikir)
+                    val capTool = stringResource(R.string.ai_cap_tool)
                     providersNow.forEachIndexed { i, p ->
                         val capsNow = store.caps(p.id, p.model)
                         val status = buildString {
@@ -88,10 +94,10 @@ fun AiSettingsPage(vm: AppViewModel, onBack: () -> Unit) {
                                 append(" · ")
                                 append(capsNow.joinToString(", ") { cap ->
                                     when (cap) {
-                                        "teks" -> stringResource(R.string.ai_cap_teks)
-                                        "gambar" -> stringResource(R.string.ai_cap_gambar)
-                                        "berpikir" -> stringResource(R.string.ai_cap_berpikir)
-                                        "tool" -> stringResource(R.string.ai_cap_tool)
+                                        "teks" -> capTeks
+                                        "gambar" -> capGambar
+                                        "berpikir" -> capBerpikir
+                                        "tool" -> capTool
                                         else -> cap
                                     }
                                 })
@@ -237,6 +243,11 @@ private fun AiProviderDialog(vm: AppViewModel, initial: AiProvider, isNew: Boole
     var capsMsg by remember(initial.id) { mutableStateOf<String?>(null) }
     var capsTesting by remember(initial.id) { mutableStateOf(false) }
     val storedCaps = remember(initial.id, initial.model) { store.caps(initial.id, initial.model) }
+    // Label lencana di konteks composable (tidak boleh dari dalam lambda joinToString).
+    val capTeksD = stringResource(R.string.ai_cap_teks)
+    val capGambarD = stringResource(R.string.ai_cap_gambar)
+    val capBerpikirD = stringResource(R.string.ai_cap_berpikir)
+    val capToolD = stringResource(R.string.ai_cap_tool)
     val fallbackName = stringResource(R.string.ai_provider_custom_name)
     val errBadUrl = stringResource(R.string.ai_base_url_invalid)
     val errKeyFail = stringResource(R.string.ai_key_save_failed)
@@ -382,10 +393,10 @@ private fun AiProviderDialog(vm: AppViewModel, initial: AiProvider, isNew: Boole
                     R.string.ai_caps_result,
                     shownCaps.joinToString(" · ") { cap ->
                         when (cap) {
-                            "teks" -> stringResource(R.string.ai_cap_teks)
-                            "gambar" -> stringResource(R.string.ai_cap_gambar)
-                            "berpikir" -> stringResource(R.string.ai_cap_berpikir)
-                            "tool" -> stringResource(R.string.ai_cap_tool)
+                            "teks" -> capTeksD
+                            "gambar" -> capGambarD
+                            "berpikir" -> capBerpikirD
+                            "tool" -> capToolD
                             else -> cap
                         }
                     },
