@@ -1,5 +1,6 @@
 package com.ledocs.app.ui.desk
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -48,6 +49,7 @@ fun AiSettingsPage(vm: AppViewModel, onBack: () -> Unit) {
     var editing by remember { mutableStateOf<AiProvider?>(null) }
     var creating by remember { mutableStateOf(false) }
     var confirmWipe by remember { mutableStateOf(false) }
+    var orderIds by remember { mutableStateOf<List<String>?>(null) }
     val draft = remember { AiProvider(id = "custom-" + UUID.randomUUID().toString(), name = "", baseUrl = "", model = "") }
     // Dibaca di badan composable (bukan di dalam DSL LazyColumn) supaya perubahan provider
     // memicu recomposition dengan benar.
@@ -63,7 +65,7 @@ fun AiSettingsPage(vm: AppViewModel, onBack: () -> Unit) {
         item { Section(stringResource(R.string.ai_title)) }
         item {
             Panel {
-                ToggleRow(LucideIcons.Sparkles, Candy.Sky, stringResource(R.string.ai_toggle_label), stringResource(R.string.ai_settings_body), store.enabled, first = true) { store.setEnabled(it) }
+                ToggleRow(LucideIcons.MessageSquareText, Candy.Sky, stringResource(R.string.ai_toggle_label), stringResource(R.string.ai_settings_body), store.enabled, first = true) { store.setEnabled(it) }
             }
         }
         if (providersNow.isNotEmpty()) {
@@ -71,17 +73,97 @@ fun AiSettingsPage(vm: AppViewModel, onBack: () -> Unit) {
             item {
                 Panel {
                     providersNow.forEachIndexed { i, p ->
+                        val capsNow = store.caps(p.id, p.model)
                         val status = buildString {
                             if (store.active?.id == p.id) append(stringResource(R.string.ai_provider_active)).append(" · ")
                             append(
                                 when {
                                     p.keyOptional -> stringResource(R.string.ai_provider_no_key_needed)
+                                    store.keyCount(p.id) > 1 -> stringResource(R.string.ai_keys_count, store.keyCount(p.id))
                                     store.hasKey(p.id) -> stringResource(R.string.ai_provider_key_saved)
                                     else -> stringResource(R.string.ai_provider_key_missing)
                                 },
                             )
+                            if (capsNow.isNotEmpty()) {
+                                append(" · ")
+                                append(capsNow.joinToString(", ") { cap ->
+                                    when (cap) {
+                                        "teks" -> stringResource(R.string.ai_cap_teks)
+                                        "gambar" -> stringResource(R.string.ai_cap_gambar)
+                                        "berpikir" -> stringResource(R.string.ai_cap_berpikir)
+                                        "tool" -> stringResource(R.string.ai_cap_tool)
+                                        else -> cap
+                                    }
+                                })
+                            }
                         }
-                        SettingRow(LucideIcons.Sparkles, Candy.Sky, p.name, { editing = p }, value = status, chevron = true, first = i == 0)
+                        SettingRow(LucideIcons.Globe, Candy.Sky, p.name, { editing = p }, value = status, chevron = true, first = i == 0)
+                    }
+                }
+            }
+        }
+        if (providersNow.size > 1) {
+            item { Section(stringResource(R.string.ai_fallback_title)) }
+            item {
+                Column {
+                    Text(
+                        stringResource(R.string.ai_fallback_body),
+                        style = ClearType.Body, color = c.inkSoft,
+                        modifier = Modifier.padding(horizontal = 30.dp),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Panel {
+                    val baseOrder = orderIds ?: store.fallbackOrder
+                    val effectiveOrder = (baseOrder.filter { id -> providersNow.any { it.id == id } } +
+                        providersNow.map { it.id }.filter { it !in baseOrder }).distinct()
+                    effectiveOrder.forEachIndexed { i, pid ->
+                        val p = providersNow.first { it.id == pid }
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(p.name, style = ClearType.BodyStrong, color = c.ink)
+                                Text(
+                                    if (store.active?.id == p.id) stringResource(R.string.ai_provider_active) else p.model,
+                                    style = ClearType.Caption, color = c.inkSoft,
+                                )
+                            }
+                            if (i > 0) {
+                                GlassPill(
+                                    onClick = {
+                                        val next = effectiveOrder.toMutableList()
+                                        next.add(i - 1, next.removeAt(i))
+                                        orderIds = next
+                                        store.fallbackOrder = next
+                                    },
+                                    height = 34.dp, label = stringResource(R.string.ai_move_up),
+                                ) { Text(stringResource(R.string.ai_move_up), style = ClearType.CaptionStrong, color = c.ink) }
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            if (i < effectiveOrder.lastIndex) {
+                                GlassPill(
+                                    onClick = {
+                                        val next = effectiveOrder.toMutableList()
+                                        next.add(i + 1, next.removeAt(i))
+                                        orderIds = next
+                                        store.fallbackOrder = next
+                                    },
+                                    height = 34.dp, label = stringResource(R.string.ai_move_down),
+                                ) { Text(stringResource(R.string.ai_move_down), style = ClearType.CaptionStrong, color = c.ink) }
+                            }
+                        }
+                    }
+                }
+                }
+            }
+        }
+        if (store.commands.isNotEmpty()) {
+            item { Section(stringResource(R.string.ai_commands_title)) }
+            item {
+                Panel {
+                    store.commands.forEachIndexed { i, cmd ->
+                        SettingRow(LucideIcons.MessageSquare, Candy.Sky, cmd.label, { store.removeCommand(cmd.id) }, value = cmd.text, first = i == 0)
                     }
                 }
             }
@@ -149,6 +231,12 @@ private fun AiProviderDialog(vm: AppViewModel, initial: AiProvider, isNew: Boole
     var testState by remember(initial.id) { mutableStateOf<String?>(null) }
     var testing by remember(initial.id) { mutableStateOf(false) }
     var saveError by remember(initial.id) { mutableStateOf<String?>(null) }
+    var keysVersion by remember(initial.id) { mutableStateOf(0) }
+    val keyCountNow = remember(initial.id, keysVersion) { store.keyCount(initial.id) }
+    var capsState by remember(initial.id) { mutableStateOf<Set<String>?>(null) }
+    var capsMsg by remember(initial.id) { mutableStateOf<String?>(null) }
+    var capsTesting by remember(initial.id) { mutableStateOf(false) }
+    val storedCaps = remember(initial.id, initial.model) { store.caps(initial.id, initial.model) }
     val fallbackName = stringResource(R.string.ai_provider_custom_name)
     val errBadUrl = stringResource(R.string.ai_base_url_invalid)
     val errKeyFail = stringResource(R.string.ai_key_save_failed)
@@ -162,14 +250,14 @@ private fun AiProviderDialog(vm: AppViewModel, initial: AiProvider, isNew: Boole
     GlassDialog(
         onDismiss = onClose,
         title = if (isNew) stringResource(R.string.ai_provider_add_custom) else stringResource(R.string.ai_provider_edit),
-        icon = LucideIcons.Sparkles, accent = Candy.Sky,
+        icon = LucideIcons.Globe, accent = Candy.Sky,
         confirm = stringResource(R.string.common_save),
         onConfirm = {
             val raw = current()
             val normalized = AiClient.validateBaseUrl(raw.baseUrl)
             when {
                 normalized == null -> saveError = errBadUrl
-                keyField.isNotBlank() && !store.setKey(raw.id, keyField.trim()) -> saveError = errKeyFail
+                keyField.isNotBlank() && !(if (isNew || store.keyCount(raw.id) == 0) store.setKey(raw.id, keyField.trim()) else store.addKey(raw.id, keyField.trim())) -> saveError = errKeyFail
                 else -> {
                     store.upsert(raw.copy(baseUrl = normalized))
                     onClose()
@@ -186,9 +274,21 @@ private fun AiProviderDialog(vm: AppViewModel, initial: AiProvider, isNew: Boole
         Spacer(Modifier.height(10.dp))
         GlassTextField(
             keyField, { keyField = it },
-            if (!isNew && store.hasKey(initial.id)) stringResource(R.string.ai_provider_api_key_hint) else stringResource(R.string.ai_provider_api_key),
+            if (keyCountNow > 0) stringResource(R.string.ai_key_add_hint) else stringResource(R.string.ai_provider_api_key),
             password = true,
         )
+        if (!isNew && keyCountNow > 0) {
+            Spacer(Modifier.height(10.dp))
+            for (i in 0 until keyCountNow) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text(stringResource(R.string.ai_key_saved_n, i + 1), style = ClearType.Caption, color = c.inkSoft, modifier = Modifier.weight(1f))
+                    GlassPill(onClick = { store.removeKeyAt(initial.id, i); keysVersion++ }, height = 32.dp, label = stringResource(R.string.ai_key_delete)) {
+                        Text(stringResource(R.string.ai_key_delete), style = ClearType.CaptionStrong, color = Candy.Tomato)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+            }
+        }
         saveError?.let {
             Spacer(Modifier.height(8.dp))
             Text(it, style = ClearType.Caption, color = Candy.Tomato)
@@ -236,6 +336,62 @@ private fun AiProviderDialog(vm: AppViewModel, initial: AiProvider, isNew: Boole
             testState == "needs_enabled" -> Text(stringResource(R.string.ai_test_needs_enabled), style = ClearType.Caption, color = Candy.Tomato, modifier = Modifier.padding(top = 10.dp))
             testState == "bad_url" -> Text(stringResource(R.string.ai_base_url_invalid), style = ClearType.Caption, color = Candy.Tomato, modifier = Modifier.padding(top = 10.dp))
             testState != null -> Text(stringResource(R.string.ai_provider_test_fail, testState!!), style = ClearType.Caption, color = Candy.Tomato, modifier = Modifier.padding(top = 10.dp))
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth()) {
+            GlassPill(
+                onClick = {
+                    when {
+                        !store.enabled -> capsMsg = "needs_enabled"
+                        else -> {
+                            val raw = current()
+                            val normalized = AiClient.validateBaseUrl(raw.baseUrl)
+                            if (normalized == null) {
+                                capsMsg = "bad_url"
+                            } else {
+                                capsTesting = true
+                                capsMsg = null
+                                val key = keyField.trim().takeIf { it.isNotBlank() }
+                                    ?: if (baseUrl.trim().trimEnd('/') == initial.baseUrl.trimEnd('/')) store.key(initial.id) else null
+                                scope.launch {
+                                    val caps = AiClient().probeCapabilities(raw.copy(baseUrl = normalized), key)
+                                    capsTesting = false
+                                    if (caps.isEmpty()) {
+                                        capsMsg = "fail"
+                                    } else {
+                                        store.setCaps(raw.id, raw.model, caps)
+                                        capsState = caps
+                                        capsMsg = "ok"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                height = 40.dp, label = stringResource(R.string.ai_caps_test),
+            ) { Text(stringResource(R.string.ai_caps_test), style = ClearType.CaptionStrong, color = c.ink) }
+        }
+        val shownCaps = capsState ?: storedCaps
+        when {
+            capsTesting -> Text(stringResource(R.string.ai_caps_testing), style = ClearType.Caption, color = c.inkSoft, modifier = Modifier.padding(top = 10.dp))
+            capsMsg == "needs_enabled" -> Text(stringResource(R.string.ai_test_needs_enabled), style = ClearType.Caption, color = Candy.Tomato, modifier = Modifier.padding(top = 10.dp))
+            capsMsg == "bad_url" -> Text(stringResource(R.string.ai_base_url_invalid), style = ClearType.Caption, color = Candy.Tomato, modifier = Modifier.padding(top = 10.dp))
+            capsMsg == "fail" -> Text(stringResource(R.string.ai_caps_none), style = ClearType.Caption, color = Candy.Tomato, modifier = Modifier.padding(top = 10.dp))
+            shownCaps.isNotEmpty() -> Text(
+                stringResource(
+                    R.string.ai_caps_result,
+                    shownCaps.joinToString(" · ") { cap ->
+                        when (cap) {
+                            "teks" -> stringResource(R.string.ai_cap_teks)
+                            "gambar" -> stringResource(R.string.ai_cap_gambar)
+                            "berpikir" -> stringResource(R.string.ai_cap_berpikir)
+                            "tool" -> stringResource(R.string.ai_cap_tool)
+                            else -> cap
+                        }
+                    },
+                ),
+                style = ClearType.Caption, color = Candy.Mint, modifier = Modifier.padding(top = 10.dp),
+            )
         }
         if (!isNew) {
             Spacer(Modifier.height(14.dp))

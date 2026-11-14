@@ -32,35 +32,42 @@ class AiClient {
     }
 
     /**
-     * Mengirim [messages] dan mengalirkan teks jawaban ke [onDelta]. Mengembalikan pesan asisten
-     * lengkap sebagai JSONObject. Retry sampai 3 kali hanya sebelum streaming mulai (429 dan 5xx,
-     * menghormati Retry-After); sekali token mengalir, kegagalan dilaporkan apa adanya.
+     * Mengirim [messages] dan mengalirkan teks jawaban ke [onDelta] serta teks penalaran model
+     * (bila ada) ke [onReasoning]. Mengembalikan pesan asisten lengkap sebagai JSONObject.
+     * Retry sampai [MAX_ATTEMPTS] kali selama belum ada token yang mengalir (jaringan lambat,
+     * 429, 5xx; menghormati Retry-After). Sekali token mengalir, kegagalan di tengah dilaporkan
+     * apa adanya supaya lapisan sesi bisa menawarkan tombol Lanjutkan, bukan mengulang diam diam.
      */
     suspend fun chatStream(
         provider: AiProvider,
         apiKey: String?,
         messages: JSONArray,
+        temperature: Double = 0.7,
+        onReasoning: (String) -> Unit = {},
         onDelta: (String) -> Unit,
     ): JSONObject = withContext(Dispatchers.IO) {
         val body = JSONObject().apply {
             put("model", provider.model)
             put("messages", messages)
             put("stream", true)
-            put("temperature", 0.7)
+            put("temperature", temperature)
         }.toString()
+        var emitted = false
+        val delta: (String) -> Unit = { piece -> emitted = true; onDelta(piece) }
+        val reasoning: (String) -> Unit = { piece -> emitted = true; onReasoning(piece) }
         var attempt = 0
         var lastError: AiException? = null
-        while (attempt < 3) {
+        while (attempt < MAX_ATTEMPTS) {
             attempt++
             try {
-                return@withContext streamOnce(provider, apiKey, body, onDelta)
+                return@withContext streamOnce(provider, apiKey, body, reasoning, delta)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: AiException) {
                 lastError = e
-                val retryable = e.kind == AiException.Kind.QUOTA || e.kind == AiException.Kind.SERVER
-                if (!retryable || attempt >= 3) throw e
-                val waitMs = e.retryAfterSec?.let { minOf(it * 1000, 10_000L) } ?: minOf(1000L shl (attempt - 1), 4000L)
+                val retryable = !emitted && (e.kind == AiException.Kind.QUOTA || e.kind == AiException.Kind.SERVER || e.kind == AiException.Kind.NETWORK)
+                if (!retryable || attempt >= MAX_ATTEMPTS) throw e
+                val waitMs = e.retryAfterSec?.let { minOf(it * 1000, 15_000L) } ?: minOf(1000L shl (attempt - 1), 8000L)
                 delay(waitMs)
             }
         }
@@ -71,9 +78,14 @@ class AiClient {
         provider: AiProvider,
         apiKey: String?,
         body: String,
+        onReasoning: (String) -> Unit,
         onDelta: (String) -> Unit,
     ): JSONObject {
-        val url = URL(provider.baseUrl.trimEnd('/') + "/chat/completions")
+        val url = try {
+            URL(provider.baseUrl.trimEnd('/') + "/chat/completions")
+        } catch (e: Exception) {
+            throw AiException(AiException.Kind.NETWORK, e.message ?: "bad url")
+        }
         val conn = url.openConnection() as HttpURLConnection
         connection = conn
         try {
@@ -87,21 +99,7 @@ class AiClient {
             if (!apiKey.isNullOrBlank()) conn.setRequestProperty("Authorization", "Bearer $apiKey")
             conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode
-            if (code !in 200..299) {
-                val errBody = runCatching { conn.errorStream?.bufferedReader()?.readText() }.getOrNull().orEmpty()
-                val msg = runCatching { JSONObject(errBody).optJSONObject("error")?.optString("message") }.getOrNull()?.takeIf { it.isNotBlank() } ?: "HTTP $code"
-                val retryAfter = conn.getHeaderField("Retry-After")?.toLongOrNull()
-                throw AiException(
-                    when {
-                        code == 401 || code == 403 -> AiException.Kind.AUTH
-                        code == 429 -> AiException.Kind.QUOTA
-                        code >= 500 -> AiException.Kind.SERVER
-                        else -> AiException.Kind.BAD_REQUEST
-                    },
-                    msg,
-                    retryAfter,
-                )
-            }
+            if (code !in 200..299) throw httpError(conn, code)
             val content = StringBuilder()
             val reasoning = StringBuilder()
             val reader = BufferedReader(InputStreamReader(conn.inputStream, Charsets.UTF_8))
@@ -119,7 +117,10 @@ class AiClient {
                     onDelta(piece)
                 }
                 val rPiece = delta.optString("reasoning_content")
-                if (rPiece.isNotEmpty()) reasoning.append(rPiece)
+                if (rPiece.isNotEmpty()) {
+                    reasoning.append(rPiece)
+                    onReasoning(rPiece)
+                }
             }
             return JSONObject().apply {
                 put("role", "assistant")
@@ -138,7 +139,135 @@ class AiClient {
         }
     }
 
+    /** Satu panggilan tanpa streaming (untuk ringkasan otomatis dan uji kemampuan). */
+    suspend fun complete(
+        provider: AiProvider,
+        apiKey: String?,
+        messages: JSONArray,
+        temperature: Double = 0.7,
+        tools: JSONArray? = null,
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("model", provider.model)
+            put("messages", messages)
+            put("stream", false)
+            put("temperature", temperature)
+            if (tools != null) put("tools", tools)
+        }.toString()
+        val url = try {
+            URL(provider.baseUrl.trimEnd('/') + "/chat/completions")
+        } catch (e: Exception) {
+            throw AiException(AiException.Kind.NETWORK, e.message ?: "bad url")
+        }
+        val conn = url.openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.instanceFollowRedirects = false
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 120_000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            if (!apiKey.isNullOrBlank()) conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            if (code !in 200..299) throw httpError(conn, code)
+            val text = conn.inputStream.bufferedReader().readText()
+            val msg = JSONObject(text).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
+                ?: throw AiException(AiException.Kind.SERVER, "empty response")
+            JSONObject().apply {
+                put("role", "assistant")
+                put("content", msg.optString("content"))
+                val r = msg.optString("reasoning_content")
+                if (r.isNotEmpty()) put("reasoning_content", r)
+                msg.optJSONArray("tool_calls")?.let { put("tool_calls", it) }
+            }
+        } catch (e: AiException) {
+            throw e
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw AiException(AiException.Kind.NETWORK, e.message ?: "network")
+        } finally {
+            runCatching { conn.disconnect() }
+        }
+    }
+
+    /**
+     * Uji kemampuan model dengan maksimal tiga panggilan kecil: teks + tool, lalu (bila perlu)
+     * teks polos, dan satu gambar piksel untuk vision. Hasilnya himpunan label kemampuan:
+     * "teks", "berpikir", "tool", "gambar". Kegagalan total mengembalikan himpunan kosong.
+     */
+    suspend fun probeCapabilities(provider: AiProvider, apiKey: String?): Set<String> {
+        val caps = mutableSetOf<String>()
+        val toolDef = JSONArray().put(
+            JSONObject().apply {
+                put("type", "function")
+                put("function", JSONObject().apply {
+                    put("name", "get_weather")
+                    put("description", "Melihat cuaca sebuah kota")
+                    put("parameters", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().put("city", JSONObject().put("type", "string")))
+                        put("required", JSONArray().put("city"))
+                    })
+                })
+            },
+        )
+        val toolMessages = JSONArray().put(
+            JSONObject().put("role", "user").put("content", "Gunakan tool get_weather untuk mengecek cuaca Jakarta."),
+        )
+        var answered = runCatching { complete(provider, apiKey, toolMessages, 0.0, toolDef) }.getOrNull()
+        if (answered != null) {
+            caps += "teks"
+            if (answered.has("tool_calls")) caps += "tool"
+            if (answered.optString("reasoning_content").isNotBlank()) caps += "berpikir"
+        } else {
+            val plain = JSONArray().put(JSONObject().put("role", "user").put("content", "Balas dengan kata OK."))
+            answered = runCatching { complete(provider, apiKey, plain, 0.0) }.getOrNull()
+            if (answered != null) {
+                caps += "teks"
+                if (answered.optString("reasoning_content").isNotBlank()) caps += "berpikir"
+            }
+        }
+        if ("teks" in caps) {
+            val visionMessages = JSONArray().put(
+                JSONObject().put("role", "user").put(
+                    "content",
+                    JSONArray()
+                        .put(JSONObject().put("type", "text").put("text", "Warna apa gambar ini? Jawab satu kata."))
+                        .put(
+                            JSONObject().put("type", "image_url").put(
+                                "image_url",
+                                JSONObject().put("url", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="),
+                            ),
+                        ),
+                ),
+            )
+            if (runCatching { complete(provider, apiKey, visionMessages, 0.0) }.getOrNull() != null) caps += "gambar"
+        }
+        return caps
+    }
+
+    private fun httpError(conn: HttpURLConnection, code: Int): AiException {
+        val errBody = runCatching { conn.errorStream?.bufferedReader()?.readText() }.getOrNull().orEmpty()
+        val msg = runCatching { JSONObject(errBody).optJSONObject("error")?.optString("message") }.getOrNull()?.takeIf { it.isNotBlank() } ?: "HTTP $code"
+        val retryAfter = conn.getHeaderField("Retry-After")?.toLongOrNull()
+        return AiException(
+            when {
+                code == 401 || code == 403 -> AiException.Kind.AUTH
+                code == 429 -> AiException.Kind.QUOTA
+                code >= 500 -> AiException.Kind.SERVER
+                else -> AiException.Kind.BAD_REQUEST
+            },
+            msg,
+            retryAfter,
+        )
+    }
+
     companion object {
+        /** Batas percobaan ulang otomatis untuk jaringan lambat (hanya sebelum token pertama). */
+        const val MAX_ATTEMPTS = 10
+
         /**
          * Validasi base URL provider: wajib https, kecuali host loopback persis (localhost,
          * 127.0.0.1, ::1) yang boleh http untuk server lokal pengguna sendiri. Tanpa userinfo.

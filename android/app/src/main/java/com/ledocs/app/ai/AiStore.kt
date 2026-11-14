@@ -29,6 +29,9 @@ data class AiProvider(
     val keyOptional: Boolean = false,
 )
 
+/** Satu perintah cepat milik pengguna, tampil sebagai chip di layar AI. */
+data class AiCommand(val id: String, val label: String, val text: String)
+
 /** Provider siap pakai: tinggal tempel key dari halaman resmi masing masing. Model bawaan bisa diubah. */
 object AiPresets {
     val all: List<AiProvider> = listOf(
@@ -107,9 +110,83 @@ class AiStore(context: Context) {
 
     fun remove(id: String) {
         providers.removeAll { it.id == id }
-        prefs.edit().remove("key:$id").apply()
+        prefs.edit().remove("key:$id").remove("keys:$id").remove("keyidx:$id").apply()
         if (activeId == id) activeId = providers.firstOrNull()?.id
         persist()
+    }
+
+    // ---- Urutan cadangan: rantai provider bila yang aktif gagal -------------------------------
+
+    /** Urutan provider cadangan (id) sesudah provider aktif, sesuai susunan pengguna. */
+    var fallbackOrder: List<String>
+        get() = runCatching {
+            val arr = JSONArray(prefs.getString("fallbackOrder", "[]"))
+            (0 until arr.length()).map { arr.getString(it) }.filter { fid -> providers.any { it.id == fid } }
+        }.getOrDefault(emptyList())
+        set(value) {
+            val arr = JSONArray()
+            value.forEach { arr.put(it) }
+            prefs.edit().putString("fallbackOrder", arr.toString()).apply()
+        }
+
+    /** Rantai percobaan lengkap: aktif dulu, lalu cadangan berurutan, hanya yang siap pakai. */
+    fun chain(): List<AiProvider> {
+        val act = active ?: return emptyList()
+        val usable = { p: AiProvider -> p.keyOptional || hasKey(p.id) }
+        val out = mutableListOf<AiProvider>()
+        if (usable(act)) out += act
+        val seen = mutableSetOf(act.id)
+        for (fid in fallbackOrder) {
+            val p = providers.firstOrNull { it.id == fid } ?: continue
+            if (p.id in seen) continue
+            seen += p.id
+            if (usable(p)) out += p
+        }
+        for (p in providers) {
+            if (p.id in seen) continue
+            seen += p.id
+            if (usable(p)) out += p
+        }
+        return out
+    }
+
+    // ---- Lencana kemampuan model hasil uji otomatis ------------------------------------------
+
+    fun caps(id: String, model: String): Set<String> =
+        prefs.getStringSet("caps:$id:$model", emptySet())?.toSet() ?: emptySet()
+
+    fun setCaps(id: String, model: String, caps: Set<String>) {
+        prefs.edit().putStringSet("caps:$id:$model", caps.toSet()).apply()
+    }
+
+    // ---- Perintah cepat milik pengguna ---------------------------------------------------------
+
+    val commands = mutableStateListOf<AiCommand>()
+
+    init {
+        runCatching {
+            val arr = JSONArray(prefs.getString("commands", "[]"))
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                commands += AiCommand(o.getString("id"), o.getString("label"), o.getString("text"))
+            }
+        }
+    }
+
+    fun addCommand(label: String, text: String) {
+        commands += AiCommand("cmd-" + java.util.UUID.randomUUID().toString(), label, text)
+        persistCommands()
+    }
+
+    fun removeCommand(id: String) {
+        commands.removeAll { it.id == id }
+        persistCommands()
+    }
+
+    private fun persistCommands() {
+        val arr = JSONArray()
+        for (cmd in commands) arr.put(JSONObject().apply { put("id", cmd.id); put("label", cmd.label); put("text", cmd.text) })
+        prefs.edit().putString("commands", arr.toString()).apply()
     }
 
     private fun persist() {
@@ -124,16 +201,54 @@ class AiStore(context: Context) {
     }
 
     // ---- API key: brankas Keystore -----------------------------------------------------------
+    // Satu provider boleh menyimpan banyak key (rotasi saat kuota habis). Format simpan:
+    // "keys:<id>" berisi JSONArray string terenkripsi; format lama "key:<id>" (satu string)
+    // dibaca sebagai daftar berisi satu key dan bermigrasi saat daftar ditulis ulang.
 
-    fun hasKey(id: String): Boolean = prefs.getString("key:$id", null) != null
+    private fun packedKeys(id: String): List<String> {
+        val raw = prefs.getString("keys:$id", null)
+        if (raw != null) return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getString(it) }
+        }.getOrDefault(emptyList())
+        val legacy = prefs.getString("key:$id", null) ?: return emptyList()
+        return listOf(legacy)
+    }
 
-    fun key(id: String): String? {
-        val stored = prefs.getString("key:$id", null) ?: return null
-        val parts = stored.split(":")
-        if (parts.size != 3 || parts[0] != "v1") {
-            prefs.edit().remove("key:$id").apply()
-            return null
+    private fun storePackedKeys(id: String, packed: List<String>) {
+        val arr = JSONArray()
+        packed.forEach { arr.put(it) }
+        prefs.edit().putString("keys:$id", arr.toString()).remove("key:$id").apply()
+    }
+
+    fun keyCount(id: String): Int = keys(id).size
+
+    fun hasKey(id: String): Boolean = keyCount(id) > 0
+
+    /**
+     * Semua key provider ini dalam keadaan terbuka. Daftar terenkripsi menyembuhkan diri:
+     * entri yang gagal dibuka dibuang dari penyimpanan, jadi hitungan, rotasi, dan penghapusan
+     * selalu menunjuk daftar yang sama persis.
+     */
+    fun keys(id: String): List<String> {
+        val packed = packedKeys(id)
+        if (packed.isEmpty()) return emptyList()
+        val keptPacked = mutableListOf<String>()
+        val out = mutableListOf<String>()
+        for (p in packed) {
+            val plain = decryptPacked(p)
+            if (plain != null) {
+                keptPacked += p
+                out += plain
+            }
         }
+        if (keptPacked.size != packed.size) storePackedKeys(id, keptPacked)
+        return out
+    }
+
+    private fun decryptPacked(stored: String): String? {
+        val parts = stored.split(":")
+        if (parts.size != 3 || parts[0] != "v1") return null
         return try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, vaultKey(), GCMParameterSpec(128, Base64.decode(parts[1], Base64.NO_WRAP)))
@@ -144,35 +259,73 @@ class AiStore(context: Context) {
             resetVault()
             null
         } catch (e: Exception) {
-            // Ciphertext rusak atau tidak terbaca: hapus supaya hasKey tidak berbohong.
-            prefs.edit().remove("key:$id").apply()
             null
         }
     }
 
-    /** Menyimpan key terenkripsi. Mengembalikan false bila brankas perangkat tidak bisa dipakai. */
+    /** Key yang sedang giliran dipakai provider ini (rotasi menunjuk ke sini). */
+    fun key(id: String): String? {
+        val all = keys(id)
+        if (all.isEmpty()) return null
+        val idx = prefs.getInt("keyidx:$id", 0)
+        return all[((idx % all.size) + all.size) % all.size]
+    }
+
+    /** Memajukan giliran key provider ini dan mengembalikan key berikutnya (null bila kosong). */
+    fun rotateKey(id: String): String? {
+        val all = keys(id)
+        if (all.size < 2) return all.firstOrNull()
+        val next = (prefs.getInt("keyidx:$id", 0) + 1) % all.size
+        prefs.edit().putInt("keyidx:$id", next).apply()
+        return all[next]
+    }
+
+    /** Mengganti seluruh key provider ini dengan satu key. False bila brankas tidak bisa dipakai. */
     fun setKey(id: String, key: String): Boolean {
         if (key.isBlank()) {
-            prefs.edit().remove("key:$id").apply()
+            prefs.edit().remove("key:$id").remove("keys:$id").remove("keyidx:$id").apply()
             return true
         }
+        val packed = encryptPacked(key) ?: return false
+        storePackedKeys(id, listOf(packed))
+        prefs.edit().remove("keyidx:$id").apply()
+        return true
+    }
+
+    /** Menambah satu key ke daftar provider ini. False bila brankas tidak bisa dipakai. */
+    fun addKey(id: String, key: String): Boolean {
+        if (key.isBlank()) return true
+        val packed = encryptPacked(key) ?: return false
+        storePackedKeys(id, packedKeys(id) + packed)
+        return true
+    }
+
+    /** Menghapus key ke-[index] (urutan tampilan) dari provider ini. */
+    fun removeKeyAt(id: String, index: Int) {
+        keys(id) // sembuhkan daftar dulu supaya indeks packed sejajar dengan urutan tampilan
+        val packed = packedKeys(id).toMutableList()
+        if (index !in packed.indices) return
+        packed.removeAt(index)
+        storePackedKeys(id, packed)
+        prefs.edit().remove("keyidx:$id").apply()
+    }
+
+    private fun encryptPacked(key: String): String? {
         return try {
-            encryptAndStore(id, key)
+            encryptOnce(key)
         } catch (e: KeyPermanentlyInvalidatedException) {
             resetVault()
-            runCatching { encryptAndStore(id, key) }.getOrDefault(false)
+            runCatching { encryptOnce(key) }.getOrNull()
         } catch (e: Exception) {
-            false
+            null
         }
     }
 
-    private fun encryptAndStore(id: String, key: String): Boolean {
+    private fun encryptOnce(key: String): String {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, vaultKey())
-        val packed = "v1:" + Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" +
+        return "v1:" + Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" +
             Base64.encodeToString(cipher.doFinal(key.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
-        prefs.edit().putString("key:$id", packed).apply()
-        return true
     }
 
     /** Menghapus kunci brankas dan semua ciphertext key (dipakai sesudah invalidasi permanen). */
@@ -182,7 +335,7 @@ class AiStore(context: Context) {
             ks.deleteEntry("ledocs.ai.vault.v1")
         }
         val edit = prefs.edit()
-        for (k in prefs.all.keys) if (k.startsWith("key:")) edit.remove(k)
+        for (k in prefs.all.keys) if (k.startsWith("key:") || k.startsWith("keys:") || k.startsWith("keyidx:")) edit.remove(k)
         edit.apply()
     }
 
@@ -204,21 +357,22 @@ class AiStore(context: Context) {
 
     // ---- Persetujuan pengiriman: per provider + host + dokumen -------------------------------
 
-    private fun consentKey(providerId: String, host: String, docId: ULong?): String =
-        "$providerId|$host|${docId?.toString() ?: "bebas"}"
+    private fun consentKey(providerId: String, host: String, docKey: String?): String =
+        "$providerId|$host|${docKey ?: "bebas"}"
 
-    fun consented(providerId: String, host: String, docId: ULong?): Boolean =
-        prefs.getStringSet("consented", emptySet())?.contains(consentKey(providerId, host, docId)) == true
+    fun consented(providerId: String, host: String, docKey: String?): Boolean =
+        prefs.getStringSet("consented", emptySet())?.contains(consentKey(providerId, host, docKey)) == true
 
-    fun consent(providerId: String, host: String, docId: ULong?) {
+    fun consent(providerId: String, host: String, docKey: String?) {
         val now = (prefs.getStringSet("consented", emptySet()) ?: emptySet()).toMutableSet()
-        now += consentKey(providerId, host, docId)
+        now += consentKey(providerId, host, docKey)
         prefs.edit().putStringSet("consented", now).apply()
     }
 
     /** Menghapus semua data AI: provider, key terenkripsi, persetujuan, dan saklar. */
     fun wipeAll() {
         providers.clear()
+        commands.clear()
         activeId = null
         enabledState.value = false
         prefs.edit().clear().apply()

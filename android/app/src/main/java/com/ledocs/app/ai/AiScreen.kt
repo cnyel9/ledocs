@@ -3,8 +3,16 @@ package com.ledocs.app.ai
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +32,7 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -41,8 +50,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.ledocs.app.R
 import com.ledocs.app.ui.AppViewModel
@@ -53,6 +64,7 @@ import com.ledocs.app.ui.glass.GlassCircle
 import com.ledocs.app.ui.glass.GlassDialog
 import com.ledocs.app.ui.glass.GlassIcon
 import com.ledocs.app.ui.glass.GlassPill
+import com.ledocs.app.ui.glass.GlassTextField
 import com.ledocs.app.ui.glass.RoundedRectangle
 import com.ledocs.app.ui.glass.glass
 import com.ledocs.app.ui.glass.pressable
@@ -60,7 +72,13 @@ import com.ledocs.app.ui.glass.wash
 import com.ledocs.app.ui.theme.Candy
 import com.ledocs.app.ui.theme.ClearType
 import com.ledocs.app.ui.theme.clear
+import java.io.File
 import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** Apakah perangkat sedang punya jalur internet (bukan sekadar tersambung ke jaringan). */
 private fun onlineNow(context: android.content.Context): Boolean = runCatching {
@@ -70,10 +88,10 @@ private fun onlineNow(context: android.content.Context): Boolean = runCatching {
 }.getOrDefault(false)
 
 /**
- * Layar Asisten AI: menggantikan navigasi di tempatnya (dock hilang selama layar ini terbuka,
- * bar ketiknya duduk di posisi yang sama). Dokumen yang sedang terbuka menempel sendiri sebagai
- * konteks; tanpa dokumen, ini obrolan bebas. Sesi hidup di AppViewModel, jadi menutup layar
- * tidak membunuh stream yang sedang berjalan.
+ * Layar Asisten AI: teks bersih tanpa ikon hias, jawaban dirender Markdown, penalaran model
+ * tampil sebagai blok Berpikir yang bisa dilipat, dan latar aurora monokrom khusus layar ini.
+ * Dokumen yang sedang terbuka menempel sendiri sebagai konteks; dokumen lain bisa ditambah.
+ * Sesi hidup di AppViewModel, jadi menutup layar tidak membunuh stream yang sedang berjalan.
  */
 @Composable
 fun AiScreen(vm: AppViewModel) {
@@ -82,7 +100,9 @@ fun AiScreen(vm: AppViewModel) {
     val store = vm.aiStore
     val session = vm.aiSession
     val doc = vm.document
-    BackHandler { vm.aiOpen = false }
+    var page by remember { mutableStateOf("chat") }
+    BackHandler(enabled = page == "chat") { vm.aiOpen = false }
+    BackHandler(enabled = page == "history") { page = "chat" }
     LaunchedEffect(doc?.id) {
         if (doc != null) session.attach(doc)
         else if (session.attachedDocId != null) session.detach()
@@ -103,6 +123,9 @@ fun AiScreen(vm: AppViewModel) {
     var input by remember { mutableStateOf("") }
     var picker by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var saveTarget by remember { mutableStateOf<AiEntry?>(null) }
+    var extraSheet by remember { mutableStateOf(false) }
+    var addingCommand by remember { mutableStateOf(false) }
     val provider = store.active
     // Provider lokal (server di perangkat sendiri) tidak butuh internet sama sekali.
     val reachable = online || (provider != null && AiClient.isLoopback(provider.baseUrl))
@@ -113,186 +136,294 @@ fun AiScreen(vm: AppViewModel) {
     /** Gerbang persetujuan: kiriman pertama yang membawa teks dokumen ke provider ini wajib izin. */
     fun withConsent(action: () -> Unit) {
         val p = provider ?: return
-        val docAttached = session.context is AiContext.Attached || session.preparing
-        if (docAttached && !store.consented(p.id, hostOf(p), session.attachedDocId)) {
+        val docAttached = session.context is AiContext.Attached || session.preparing || session.extraDocs.any { it.text != null }
+        if (docAttached && !AiClient.isLoopback(p.baseUrl) && !store.consented(p.id, hostOf(p), session.attachedDocPath)) {
             pendingAction = action
         } else {
             action()
         }
     }
 
+    fun sendText(text: String) {
+        val clean = text.trim()
+        if (clean.isEmpty() || session.running || session.preparing) return
+        if (!reachable) {
+            session.enqueue(clean)
+        } else {
+            withConsent { session.send(clean) }
+        }
+    }
+
     fun trySend() {
-        val text = input.trim()
-        if (text.isEmpty() || session.running || session.preparing) return
-        withConsent {
-            input = ""
-            session.send(text)
-        }
+        val text = input
+        if (text.isBlank() || session.running || session.preparing) return
+        input = ""
+        sendText(text)
     }
 
-    fun retryWithConsent(entry: AiEntry) {
-        withConsent { session.retry(entry) }
+    // Antrean offline terkirim sendiri begitu jaringan kembali (lewat gerbang persetujuan).
+    LaunchedEffect(reachable) {
+        if (reachable && provider != null) withConsent { session.flushQueue() }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-        Spacer(Modifier.height(14.dp))
-        ScreenHeader(null, stringResource(R.string.ai_title), onBack = { vm.aiOpen = false }) {
-            GlassCircle(onClick = { session.newChat() }, size = 40.dp, label = stringResource(R.string.ai_new_chat)) {
-                GlassIcon(LucideIcons.MessageSquarePlus, null, Modifier.size(19.dp))
-            }
-        }
-        // pil provider: nama dan model aktif, ketuk untuk mengganti
-        Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            GlassPill(onClick = { picker = true }, height = 40.dp, horizontalPadding = 14.dp, label = provider?.name) {
-                GlassIcon(LucideIcons.Sparkles, null, Modifier.size(16.dp), tint = Candy.Sky)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (provider == null) stringResource(R.string.ai_open_settings) else "${provider.name} · ${provider.model}",
-                    style = ClearType.CaptionStrong, color = c.ink,
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            if (session.running) Text(stringResource(R.string.ai_thinking), style = ClearType.Caption, color = c.inkSoft)
-        }
-        // chip konteks dokumen
-        if (doc != null) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                GlassIcon(LucideIcons.FileText, null, Modifier.size(16.dp), tint = Candy.Sky)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    when {
-                        session.preparing -> stringResource(R.string.ai_context_preparing)
-                        else -> when (val ctx = session.context) {
-                            is AiContext.Attached -> stringResource(R.string.ai_context_pages, ctx.name, ctx.pages) +
-                                if (ctx.truncated) " · " + stringResource(R.string.ai_context_truncated) else ""
-                            AiContext.Unavailable -> stringResource(R.string.ai_context_unavailable)
-                            else -> doc.name
-                        }
-                    },
-                    style = ClearType.Caption, color = c.inkSoft, modifier = Modifier.weight(1f),
-                )
-                if (session.attachedDocId != null) {
-                    GlassCircle(onClick = { session.detach() }, size = 30.dp, label = stringResource(R.string.ai_detach)) {
-                        GlassIcon(LucideIcons.X, null, Modifier.size(14.dp))
+    Box(Modifier.fillMaxSize()) {
+        AiAuroraBackground(Modifier.fillMaxSize())
+        if (page == "history") {
+            AiHistoryPage(vm, onBack = { page = "chat" })
+        } else {
+            Column(Modifier.fillMaxSize()) {
+                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                Spacer(Modifier.height(14.dp))
+                ScreenHeader(null, stringResource(R.string.ai_title), onBack = { vm.aiOpen = false }) {
+                    GlassPill(onClick = { page = "history" }, height = 40.dp, horizontalPadding = 14.dp, label = stringResource(R.string.ai_history)) {
+                        Text(stringResource(R.string.ai_history), style = ClearType.CaptionStrong, color = c.ink)
                     }
-                }
-            }
-        }
-
-        val listState = rememberLazyListState()
-        LaunchedEffect(session) {
-            snapshotFlow { session.entries.size to (session.entries.lastOrNull()?.text?.length ?: 0) }
-                .collect {
-                    if (session.entries.isNotEmpty() && !listState.isScrollInProgress) {
-                        listState.animateScrollToItem(session.entries.size - 1)
-                    }
-                }
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                provider == null -> Column(
-                    Modifier.fillMaxSize().padding(horizontal = 30.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    GlassIcon(LucideIcons.Sparkles, null, Modifier.size(40.dp), tint = Candy.Sky)
-                    Spacer(Modifier.height(14.dp))
-                    Text(stringResource(R.string.ai_no_provider), style = ClearType.Body, color = c.inkSoft)
-                    Spacer(Modifier.height(16.dp))
-                    GlassPill(onClick = { vm.aiOpen = false; vm.settingsOpen = true }, label = stringResource(R.string.ai_open_settings)) {
-                        Text(stringResource(R.string.ai_open_settings), style = ClearType.BodyStrong, color = c.ink)
-                    }
-                }
-                session.entries.isEmpty() && !reachable -> Column(
-                    Modifier.fillMaxSize().padding(horizontal = 30.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    GlassIcon(LucideIcons.Globe, null, Modifier.size(40.dp), tint = c.inkSoft)
-                    Spacer(Modifier.height(14.dp))
-                    Text(stringResource(R.string.ai_offline), style = ClearType.Title, color = c.ink)
-                    Spacer(Modifier.height(8.dp))
-                    Text(stringResource(R.string.ai_offline_body), style = ClearType.Body, color = c.inkSoft)
-                }
-                session.entries.isEmpty() -> Column(
-                    Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text(
-                        if (doc != null) stringResource(R.string.ai_context_doc) else stringResource(R.string.ai_attach_hint),
-                        style = ClearType.Body, color = c.inkSoft,
-                    )
-                    val suggestions = if (doc != null) {
-                        listOf(stringResource(R.string.ai_suggest_summarize), stringResource(R.string.ai_suggest_main_points))
-                    } else {
-                        listOf(stringResource(R.string.ai_suggest_letter), stringResource(R.string.ai_suggest_explain))
-                    }
-                    suggestions.forEach { s ->
-                        GlassPill(onClick = { input = s }, height = 44.dp, label = s) {
-                            Text(s, style = ClearType.BodyStrong, color = c.ink)
-                        }
-                    }
-                }
-                else -> LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 22.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    items(session.entries) { entry -> EntryRow(entry, onRetry = { retryWithConsent(entry) }) }
-                }
-            }
-        }
-
-        // bar ketik: kapsul kaca yang sama bahasanya dengan dock, duduk di posisi dock
-        if (provider != null) {
-            if (!reachable) {
-                Row(
-                    Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    GlassIcon(LucideIcons.Globe, null, Modifier.size(18.dp), tint = c.inkSoft)
-                    Spacer(Modifier.width(10.dp))
-                    Text(stringResource(R.string.ai_offline), style = ClearType.BodyStrong, color = c.inkSoft)
-                }
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)
-                        .glass(Capsule, c.glass, blur = 3.dp, lensHeight = 14.dp, lensAmount = 26.dp)
-                        .drawBehind { drawRect(c.capsule, alpha = 0.9f) }
-                        .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    BasicTextField(
-                        value = input,
-                        onValueChange = { input = it },
-                        modifier = Modifier.weight(1f),
-                        textStyle = ClearType.Body.copy(color = c.ink),
-                        cursorBrush = SolidColor(c.ink),
-                        maxLines = 4,
-                        decorationBox = { inner ->
-                            Box {
-                                if (input.isEmpty()) Text(stringResource(R.string.ai_input_hint), style = ClearType.Body, color = c.inkSoft)
-                                inner()
-                            }
-                        },
-                    )
                     Spacer(Modifier.width(8.dp))
-                    if (session.running) {
-                        Box(
-                            Modifier.size(46.dp).pressable({ session.stop() }, pressedScale = 0.9f, feel = null).clip(CircleShape).background(androidx.compose.ui.graphics.Color.White),
-                            contentAlignment = Alignment.Center,
-                        ) { Box(Modifier.size(16.dp).clip(RoundedRectangle(4.dp)).background(Candy.Tomato)) }
-                    } else {
-                        GlassCircle(
-                            onClick = { trySend() }, size = 46.dp,
-                            surface = if (input.isBlank() || session.preparing) c.glass else Candy.Sky,
-                            label = stringResource(R.string.ai_send),
-                        ) { GlassIcon(LucideIcons.Send, null, Modifier.size(20.dp), tint = if (input.isBlank() || session.preparing) c.inkSoft else androidx.compose.ui.graphics.Color.White) }
+                    GlassPill(onClick = { session.newChat() }, height = 40.dp, horizontalPadding = 14.dp, label = stringResource(R.string.ai_new_chat)) {
+                        Text(stringResource(R.string.ai_new), style = ClearType.CaptionStrong, color = c.ink)
+                    }
+                }
+                // pil provider: teks saja, nama dan model aktif, ketuk untuk mengganti
+                Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    GlassPill(onClick = { picker = true }, height = 40.dp, horizontalPadding = 14.dp, label = provider?.name) {
+                        Text(
+                            if (provider == null) stringResource(R.string.ai_open_settings) else "${provider.name} · ${provider.model}",
+                            style = ClearType.CaptionStrong, color = c.ink,
+                        )
+                    }
+                }
+                // chip konteks dokumen
+                if (doc != null) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            when {
+                                session.preparing -> stringResource(R.string.ai_context_preparing)
+                                else -> when (val ctx = session.context) {
+                                    is AiContext.Attached -> stringResource(R.string.ai_context_pages, ctx.name, ctx.pages) +
+                                        if (ctx.truncated) " · " + stringResource(R.string.ai_context_truncated) else ""
+                                    AiContext.Unavailable -> stringResource(R.string.ai_context_unavailable)
+                                    else -> doc.name
+                                }
+                            },
+                            style = ClearType.Caption, color = c.inkSoft, modifier = Modifier.weight(1f),
+                        )
+                        if (session.attachedDocId != null) {
+                            GlassPill(onClick = { session.detach() }, height = 30.dp, horizontalPadding = 10.dp, label = stringResource(R.string.ai_detach)) {
+                                Text(stringResource(R.string.ai_detach_short), style = ClearType.Caption, color = c.ink)
+                            }
+                        }
+                    }
+                }
+                // chip dokumen konteks tambahan + tombol tambah
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 2.dp).horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    session.extraDocs.forEach { extra ->
+                        GlassPill(onClick = { session.removeExtraDoc(extra) }, height = 30.dp, horizontalPadding = 10.dp, label = extra.name) {
+                            Text(
+                                extra.name + when {
+                                    extra.loading -> " · " + stringResource(R.string.ai_extra_loading)
+                                    extra.failed -> " · " + stringResource(R.string.ai_extra_failed)
+                                    else -> " · ✕"
+                                },
+                                style = ClearType.Caption, color = if (extra.failed) Candy.Tomato else c.ink,
+                            )
+                        }
+                    }
+                    GlassPill(onClick = { extraSheet = true }, height = 30.dp, horizontalPadding = 10.dp, label = stringResource(R.string.ai_extra_add)) {
+                        Text("+ " + stringResource(R.string.ai_extra_add), style = ClearType.Caption, color = c.ink)
+                    }
+                }
+                // meter konteks
+                if (session.contextChars > 0) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.weight(1f).height(3.dp).clip(Capsule).background(c.ink.copy(alpha = 0.15f))) {
+                            Box(Modifier.fillMaxWidth(session.contextFraction).height(3.dp).clip(Capsule).background(c.ink.copy(alpha = 0.75f)))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            stringResource(R.string.ai_context_meter, (session.contextFraction * 100).toInt()),
+                            style = ClearType.Caption, color = c.inkSoft,
+                        )
+                    }
+                }
+
+                val listState = rememberLazyListState()
+                LaunchedEffect(session) {
+                    snapshotFlow { session.entries.size to (session.entries.lastOrNull()?.text?.length ?: 0) }
+                        .collect {
+                            if (session.entries.isNotEmpty() && !listState.isScrollInProgress) {
+                                // Kartu ringkasan (bila ada) menempati indeks 0, entri sesudahnya.
+                                val target = session.entries.size - 1 + if (session.summary != null) 1 else 0
+                                listState.animateScrollToItem(target)
+                            }
+                        }
+                }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    when {
+                        provider == null -> Column(
+                            Modifier.fillMaxSize().padding(horizontal = 30.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(stringResource(R.string.ai_no_provider), style = ClearType.Body, color = c.inkSoft)
+                            Spacer(Modifier.height(16.dp))
+                            GlassPill(onClick = { vm.aiOpen = false; vm.settingsOpen = true }, label = stringResource(R.string.ai_open_settings)) {
+                                Text(stringResource(R.string.ai_open_settings), style = ClearType.BodyStrong, color = c.ink)
+                            }
+                        }
+                        session.entries.isEmpty() && !reachable -> Column(
+                            Modifier.fillMaxSize().padding(horizontal = 30.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(stringResource(R.string.ai_offline), style = ClearType.Title, color = c.ink)
+                            Spacer(Modifier.height(8.dp))
+                            Text(stringResource(R.string.ai_offline_body), style = ClearType.Body, color = c.inkSoft)
+                        }
+                        session.entries.isEmpty() -> Column(
+                            Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            session.summary?.let { s ->
+                                SummaryCard(s)
+                            }
+                            Text(
+                                if (doc != null) stringResource(R.string.ai_context_doc) else stringResource(R.string.ai_attach_hint),
+                                style = ClearType.Body, color = c.inkSoft,
+                            )
+                            val suggestions = if (doc != null) {
+                                listOf(stringResource(R.string.ai_suggest_summarize), stringResource(R.string.ai_suggest_main_points))
+                            } else {
+                                listOf(stringResource(R.string.ai_suggest_letter), stringResource(R.string.ai_suggest_explain))
+                            }
+                            suggestions.forEach { s ->
+                                GlassPill(onClick = { input = s }, height = 44.dp, label = s) {
+                                    Text(s, style = ClearType.BodyStrong, color = c.ink)
+                                }
+                            }
+                        }
+                        else -> LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            session.summary?.let { s ->
+                                item(key = "summary") { SummaryCard(s) }
+                            }
+                            items(session.entries) { entry ->
+                                EntryRow(
+                                    entry = entry,
+                                    isLast = entry === session.entries.lastOrNull(),
+                                    isRunningEntry = session.running && entry === session.entries.lastOrNull() && entry.role == "assistant",
+                                    onRetry = { withConsent { session.retry(entry) } },
+                                    onContinue = { withConsent { session.continueAnswer(entry) } },
+                                    onSave = { saveTarget = entry },
+                                    onOpenSaved = { path -> vm.open(Uri.fromFile(File(path))) },
+                                )
+                            }
+                            if (session.followUps.isNotEmpty() && !session.running) {
+                                item(key = "followups") {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        session.followUps.forEach { q ->
+                                            GlassPill(onClick = { sendText(q) }, height = 40.dp, label = q) {
+                                                Text(q, style = ClearType.CaptionStrong, color = c.ink)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // bar gaya + perintah cepat
+                if (provider != null) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AiStyle.entries.forEach { style ->
+                            val selected = session.style == style
+                            GlassPill(
+                                onClick = { session.setStyle(style) }, height = 34.dp, horizontalPadding = 12.dp,
+                                surface = if (selected) Candy.Sky else androidx.compose.ui.graphics.Color.Unspecified,
+                                label = style.name,
+                            ) {
+                                Text(
+                                    stringResource(
+                                        when (style) {
+                                            AiStyle.Ringkas -> R.string.ai_style_ringkas
+                                            AiStyle.Seimbang -> R.string.ai_style_seimbang
+                                            AiStyle.Kreatif -> R.string.ai_style_kreatif
+                                        },
+                                    ),
+                                    style = ClearType.CaptionStrong,
+                                    color = if (selected) androidx.compose.ui.graphics.Color.White else c.ink,
+                                )
+                            }
+                        }
+                        store.commands.forEach { cmd ->
+                            GlassPill(onClick = { sendText(cmd.text) }, height = 34.dp, horizontalPadding = 12.dp, label = cmd.label) {
+                                Text(cmd.label, style = ClearType.CaptionStrong, color = c.ink)
+                            }
+                        }
+                        GlassPill(onClick = { addingCommand = true }, height = 34.dp, horizontalPadding = 12.dp, label = stringResource(R.string.ai_commands_add)) {
+                            Text("+ " + stringResource(R.string.ai_commands_add), style = ClearType.CaptionStrong, color = c.inkSoft)
+                        }
+                    }
+                    if (!reachable) {
+                        Text(
+                            stringResource(R.string.ai_queue_hint),
+                            style = ClearType.Caption, color = c.inkSoft,
+                            modifier = Modifier.padding(horizontal = 22.dp, vertical = 2.dp),
+                        )
+                    }
+                    // bar ketik: kapsul kaca yang sama bahasanya dengan dock, duduk di posisi dock
+                    Row(
+                        Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)
+                            .glass(Capsule, c.glass, blur = 3.dp, lensHeight = 14.dp, lensAmount = 26.dp)
+                            .drawBehind { drawRect(c.capsule, alpha = 0.9f) }
+                            .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        BasicTextField(
+                            value = input,
+                            onValueChange = { input = it },
+                            modifier = Modifier.weight(1f),
+                            textStyle = ClearType.Body.copy(color = c.ink),
+                            cursorBrush = SolidColor(c.ink),
+                            maxLines = 4,
+                            decorationBox = { inner ->
+                                Box {
+                                    if (input.isEmpty()) Text(stringResource(R.string.ai_input_hint), style = ClearType.Body, color = c.inkSoft)
+                                    inner()
+                                }
+                            },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        if (session.running) {
+                            Box(
+                                Modifier.size(46.dp).pressable({ session.stop() }, pressedScale = 0.9f, feel = null).clip(CircleShape).background(androidx.compose.ui.graphics.Color.White),
+                                contentAlignment = Alignment.Center,
+                            ) { Box(Modifier.size(16.dp).clip(RoundedRectangle(4.dp)).background(Candy.Tomato)) }
+                        } else {
+                            GlassCircle(
+                                onClick = { trySend() }, size = 46.dp,
+                                surface = if (input.isBlank() || session.preparing) c.glass else Candy.Sky,
+                                label = stringResource(R.string.ai_send),
+                            ) { GlassIcon(LucideIcons.Send, null, Modifier.size(20.dp), tint = if (input.isBlank() || session.preparing) c.inkSoft else androidx.compose.ui.graphics.Color.White) }
+                        }
                     }
                 }
             }
@@ -301,7 +432,7 @@ fun AiScreen(vm: AppViewModel) {
 
     if (picker) {
         GlassDialog(
-            onDismiss = { picker = false }, title = stringResource(R.string.ai_providers_title), icon = LucideIcons.Sparkles, accent = Candy.Sky,
+            onDismiss = { picker = false }, title = stringResource(R.string.ai_providers_title),
             dismiss = stringResource(R.string.common_cancel),
         ) {
             store.providers.forEach { p ->
@@ -312,6 +443,13 @@ fun AiScreen(vm: AppViewModel) {
                     Column(Modifier.weight(1f)) {
                         Text(p.name, style = ClearType.BodyStrong, color = c.ink)
                         Text(p.model, style = ClearType.Caption, color = c.inkSoft)
+                        val caps = store.caps(p.id, p.model)
+                        if (caps.isNotEmpty()) {
+                            Text(
+                                stringResource(R.string.ai_caps_result, capsLabel(caps)),
+                                style = ClearType.Caption, color = c.inkSoft,
+                            )
+                        }
                     }
                     if (store.active?.id == p.id) GlassIcon(LucideIcons.Check, null, Modifier.size(18.dp), tint = Candy.Mint)
                 }
@@ -323,15 +461,74 @@ fun AiScreen(vm: AppViewModel) {
         }
     }
 
+    saveTarget?.let { entry ->
+        GlassDialog(
+            onDismiss = { saveTarget = null }, title = stringResource(R.string.ai_save_as),
+            dismiss = stringResource(R.string.common_cancel),
+        ) {
+            Row {
+                GlassPill(onClick = { session.saveAnswerAs(entry, "pdf"); saveTarget = null }, height = 42.dp, label = stringResource(R.string.ai_save_pdf)) {
+                    Text(stringResource(R.string.ai_save_pdf), style = ClearType.BodyStrong, color = c.ink)
+                }
+                Spacer(Modifier.width(8.dp))
+                GlassPill(onClick = { session.saveAnswerAs(entry, "docx"); saveTarget = null }, height = 42.dp, label = stringResource(R.string.ai_save_docx)) {
+                    Text(stringResource(R.string.ai_save_docx), style = ClearType.BodyStrong, color = c.ink)
+                }
+            }
+        }
+    }
+
+    if (extraSheet) {
+        // Daftar berkas terakhir dibaca di luar thread utama (akses berkas tersinkron).
+        var recents by remember { mutableStateOf<List<com.ledocs.app.engine.RecentFile>>(emptyList()) }
+        LaunchedEffect(Unit) { recents = withContext(Dispatchers.IO) { vm.recents.list() } }
+        GlassDialog(
+            onDismiss = { extraSheet = false }, title = stringResource(R.string.ai_extra_title),
+            dismiss = stringResource(R.string.common_cancel),
+        ) {
+            val addable = recents.filter { r -> r.uri != session.attachedDocPath && session.extraDocs.none { it.uriString == r.uri } }
+            if (addable.isEmpty()) {
+                Text(stringResource(R.string.ai_history_empty), style = ClearType.Body, color = c.inkSoft)
+            } else {
+                addable.take(20).forEach { r ->
+                    Row(
+                        Modifier.fillMaxWidth().pressable({ session.addExtraDoc(r.uri, r.name); extraSheet = false }).padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(r.name, style = ClearType.BodyStrong, color = c.ink, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+
+    if (addingCommand) {
+        var label by remember { mutableStateOf("") }
+        var body by remember { mutableStateOf("") }
+        GlassDialog(
+            onDismiss = { addingCommand = false }, title = stringResource(R.string.ai_commands_add),
+            confirm = stringResource(R.string.common_save),
+            onConfirm = {
+                if (label.isNotBlank() && body.isNotBlank()) store.addCommand(label.trim(), body.trim())
+                addingCommand = false
+            },
+            dismiss = stringResource(R.string.common_cancel),
+        ) {
+            GlassTextField(label, { label = it }, stringResource(R.string.ai_command_label))
+            Spacer(Modifier.height(10.dp))
+            GlassTextField(body, { body = it }, stringResource(R.string.ai_command_text))
+        }
+    }
+
     pendingAction?.let { action ->
         val p = provider
         if (p != null) {
             val host = hostOf(p)
             GlassDialog(
-                onDismiss = { pendingAction = null }, title = stringResource(R.string.ai_consent_title), icon = LucideIcons.Sparkles, accent = Candy.Sky,
+                onDismiss = { pendingAction = null }, title = stringResource(R.string.ai_consent_title),
                 confirm = stringResource(R.string.ai_consent_send),
                 onConfirm = {
-                    store.consent(p.id, host, session.attachedDocId)
+                    store.consent(p.id, host, session.attachedDocPath)
                     pendingAction = null
                     action()
                 },
@@ -350,40 +547,274 @@ fun AiScreen(vm: AppViewModel) {
     }
 }
 
+/** Label kemampuan yang bisa dibaca pengguna dari himpunan label internal hasil uji. */
 @Composable
-private fun EntryRow(entry: AiEntry, onRetry: () -> Unit) {
+private fun capsLabel(caps: Set<String>): String {
+    val parts = mutableListOf<String>()
+    if ("teks" in caps) parts += stringResource(R.string.ai_cap_teks)
+    if ("gambar" in caps) parts += stringResource(R.string.ai_cap_gambar)
+    if ("berpikir" in caps) parts += stringResource(R.string.ai_cap_berpikir)
+    if ("tool" in caps) parts += stringResource(R.string.ai_cap_tool)
+    return parts.joinToString(" · ")
+}
+
+/** Kartu ringkasan otomatis dokumen yang menempel. */
+@Composable
+private fun SummaryCard(text: String) {
+    val c = clear
+    Column(
+        Modifier.fillMaxWidth().wash(RoundedRectangle(18.dp), c.capsule).padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(stringResource(R.string.ai_summary_title), style = ClearType.CaptionStrong, color = c.ink)
+        Spacer(Modifier.height(6.dp))
+        MarkdownText(text)
+        Spacer(Modifier.height(6.dp))
+        Text(stringResource(R.string.ai_summary_auto), style = ClearType.Caption, color = c.inkSoft)
+    }
+}
+
+/** Tiga titik beranimasi gelombang: indikator jawaban sedang disiapkan atau masih mengalir. */
+@Composable
+private fun TypingDots() {
+    val c = clear
+    val transition = rememberInfiniteTransition(label = "ai-dots")
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+        for (i in 0..2) {
+            val alpha by transition.animateFloat(
+                initialValue = 0.25f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse, initialStartOffset = StartOffset(i * 170)),
+                label = "dot$i",
+            )
+            Box(Modifier.size(7.dp).clip(CircleShape).background(c.ink.copy(alpha = alpha)))
+        }
+    }
+}
+
+@Composable
+private fun EntryRow(
+    entry: AiEntry,
+    isLast: Boolean,
+    isRunningEntry: Boolean,
+    onRetry: () -> Unit,
+    onContinue: () -> Unit,
+    onSave: () -> Unit,
+    onOpenSaved: (String) -> Unit,
+) {
     val c = clear
     if (entry.role == "user") {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
             Box(
                 // Gelembung di daftar yang bergeser memakai wash (pola codebase untuk permukaan
                 // yang scroll), bukan backdrop blur asli yang mahal per frame.
                 Modifier.fillMaxWidth(0.85f).wash(Capsule, c.capsule)
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             ) { SelectionContainer { Text(entry.text, style = ClearType.Body, color = c.ink) } }
+            if (entry.queued) {
+                Spacer(Modifier.height(4.dp))
+                Text(stringResource(R.string.ai_queued), style = ClearType.Caption, color = c.inkSoft)
+            }
         }
         return
     }
     Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(26.dp).clip(CircleShape).background(Candy.Sky.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                GlassIcon(LucideIcons.Sparkles, null, Modifier.size(14.dp), tint = Candy.Sky)
+        if (entry.reasoning.isNotBlank()) {
+            var open by remember(entry) { mutableStateOf<Boolean?>(null) }
+            val expanded = open ?: entry.text.isEmpty()
+            Column(
+                Modifier.fillMaxWidth().wash(RoundedRectangle(14.dp), c.capsule).padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().pressable({ open = !expanded }),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (entry.text.isEmpty()) stringResource(R.string.ai_thinking_label) else stringResource(R.string.ai_thought_done),
+                        style = ClearType.CaptionStrong, color = c.ink,
+                    )
+                }
+                if (expanded) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(entry.reasoning, style = ClearType.Caption, color = c.inkSoft)
+                }
             }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                if (entry.text.isNotEmpty()) SelectionContainer { Text(entry.text, style = ClearType.Body, color = c.ink) }
-                if (entry.stopped) Text(stringResource(R.string.ai_stopped), style = ClearType.Caption, color = c.inkSoft)
-                if (entry.interrupted) Text(stringResource(R.string.ai_interrupted), style = ClearType.Caption, color = Candy.Tangerine)
-                if (entry.failed) {
-                    entry.error?.let { Text(it, style = ClearType.Body, color = Candy.Tomato) }
-                    Spacer(Modifier.height(8.dp))
-                    GlassPill(onClick = onRetry, height = 38.dp, horizontalPadding = 12.dp, label = stringResource(R.string.ai_retry)) {
-                        GlassIcon(LucideIcons.RotateCcw, null, Modifier.size(15.dp), tint = c.ink)
-                        Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.height(8.dp))
+        }
+        if (entry.text.isNotEmpty()) {
+            SelectionContainer { MarkdownText(entry.text) }
+        } else if (isRunningEntry && entry.reasoning.isEmpty()) {
+            TypingDots()
+        }
+        if (isRunningEntry && entry.text.isNotEmpty()) TypingDots()
+        if (entry.stopped) Text(stringResource(R.string.ai_stopped), style = ClearType.Caption, color = c.inkSoft)
+        if (entry.interrupted) Text(stringResource(R.string.ai_interrupted), style = ClearType.Caption, color = Candy.Tangerine)
+        if (entry.failed) {
+            entry.error?.let { Text(it, style = ClearType.Body, color = Candy.Tomato) }
+        }
+        if (entry.saving) {
+            Spacer(Modifier.height(6.dp))
+            Text(stringResource(R.string.ai_saving), style = ClearType.Caption, color = c.inkSoft)
+        }
+        if (entry.saveFailed) {
+            Spacer(Modifier.height(6.dp))
+            Text(stringResource(R.string.ai_save_failed), style = ClearType.Caption, color = Candy.Tomato)
+        }
+        entry.savedName?.let { name ->
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.ai_saved_as, name), style = ClearType.Caption, color = c.inkSoft, modifier = Modifier.weight(1f))
+                entry.savedPath?.let { path ->
+                    GlassPill(onClick = { onOpenSaved(path) }, height = 32.dp, horizontalPadding = 12.dp, label = stringResource(R.string.ai_open_saved)) {
+                        Text(stringResource(R.string.ai_open_saved), style = ClearType.CaptionStrong, color = c.ink)
+                    }
+                }
+            }
+        }
+        val showActions = !isRunningEntry && (entry.text.isNotBlank() || entry.failed)
+        if (showActions) {
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val clipboard = LocalClipboardManager.current
+                if (entry.text.isNotBlank()) {
+                    GlassPill(onClick = { clipboard.setText(AnnotatedString(entry.text)) }, height = 34.dp, horizontalPadding = 12.dp, label = stringResource(R.string.ai_copy)) {
+                        Text(stringResource(R.string.ai_copy), style = ClearType.CaptionStrong, color = c.ink)
+                    }
+                    GlassPill(onClick = onSave, height = 34.dp, horizontalPadding = 12.dp, label = stringResource(R.string.ai_save_as)) {
+                        Text(stringResource(R.string.ai_save_as), style = ClearType.CaptionStrong, color = c.ink)
+                    }
+                }
+                if (entry.canContinue && isLast) {
+                    GlassPill(onClick = onContinue, height = 34.dp, horizontalPadding = 12.dp, label = stringResource(R.string.ai_continue)) {
+                        Text(stringResource(R.string.ai_continue), style = ClearType.CaptionStrong, color = Candy.Sky)
+                    }
+                }
+                if (entry.failed && isLast) {
+                    GlassPill(onClick = onRetry, height = 34.dp, horizontalPadding = 12.dp, label = stringResource(R.string.ai_retry)) {
                         Text(stringResource(R.string.ai_retry), style = ClearType.CaptionStrong, color = c.ink)
                     }
                 }
             }
+        }
+    }
+}
+
+/** Halaman riwayat obrolan: cari, sematkan, ganti nama, hapus, dan buka lagi obrolan + dokumennya. */
+@Composable
+private fun AiHistoryPage(vm: AppViewModel, onBack: () -> Unit) {
+    val c = clear
+    val session = vm.aiSession
+    var query by remember { mutableStateOf("") }
+    var renameTarget by remember { mutableStateOf<AiChatMeta?>(null) }
+    var deleteTarget by remember { mutableStateOf<AiChatMeta?>(null) }
+    val dateFmt = remember { SimpleDateFormat("d MMM yyyy, HH.mm", Locale("id", "ID")) }
+    val filtered = session.chats
+        .filter { m -> query.isBlank() || m.title.contains(query, ignoreCase = true) || (m.docName?.contains(query, ignoreCase = true) == true) }
+        .sortedWith(compareByDescending<AiChatMeta> { it.pinned }.thenByDescending { it.updatedAt })
+
+    fun openChat(meta: AiChatMeta) {
+        when {
+            meta.docPath == null -> {
+                if (session.attachedDocPath != null) session.detach()
+                session.openChat(meta)
+            }
+            meta.docPath == session.attachedDocPath -> session.openChat(meta)
+            else -> {
+                session.requestChat(meta.id)
+                vm.open(Uri.parse(meta.docPath))
+            }
+        }
+        onBack()
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        Spacer(Modifier.height(14.dp))
+        ScreenHeader(null, stringResource(R.string.ai_history), onBack = onBack)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 6.dp)
+                .glass(Capsule, c.glass, blur = 3.dp, lensHeight = 12.dp, lensAmount = 22.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = ClearType.Body.copy(color = c.ink),
+                cursorBrush = SolidColor(c.ink),
+                singleLine = true,
+                decorationBox = { inner ->
+                    Box {
+                        if (query.isEmpty()) Text(stringResource(R.string.ai_history_search), style = ClearType.Body, color = c.inkSoft)
+                        inner()
+                    }
+                },
+            )
+        }
+        if (filtered.isEmpty()) {
+            Text(
+                stringResource(R.string.ai_history_empty),
+                style = ClearType.Body, color = c.inkSoft,
+                modifier = Modifier.padding(horizontal = 30.dp, vertical = 16.dp),
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 22.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(filtered, key = { it.id }) { meta ->
+                    Column(
+                        Modifier.fillMaxWidth().wash(RoundedRectangle(18.dp), c.capsule)
+                            .pressable({ openChat(meta) })
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Text(meta.title.ifBlank { stringResource(R.string.ai_history_free) }, style = ClearType.BodyStrong, color = c.ink, maxLines = 2)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            (meta.docName ?: stringResource(R.string.ai_history_free)) + " · " + dateFmt.format(Date(meta.updatedAt)) +
+                                if (meta.pinned) " · " + stringResource(R.string.ai_pinned) else "",
+                            style = ClearType.Caption, color = c.inkSoft,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GlassPill(
+                                onClick = { session.pinChat(meta, !meta.pinned) }, height = 32.dp, horizontalPadding = 12.dp,
+                                label = stringResource(if (meta.pinned) R.string.ai_unpin else R.string.ai_pin),
+                            ) {
+                                Text(stringResource(if (meta.pinned) R.string.ai_unpin else R.string.ai_pin), style = ClearType.CaptionStrong, color = c.ink)
+                            }
+                            GlassPill(onClick = { renameTarget = meta }, height = 32.dp, horizontalPadding = 12.dp, label = stringResource(R.string.ai_rename)) {
+                                Text(stringResource(R.string.ai_rename), style = ClearType.CaptionStrong, color = c.ink)
+                            }
+                            GlassPill(onClick = { deleteTarget = meta }, height = 32.dp, horizontalPadding = 12.dp, label = stringResource(R.string.ai_delete_chat)) {
+                                Text(stringResource(R.string.ai_delete_chat), style = ClearType.CaptionStrong, color = Candy.Tomato)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    renameTarget?.let { meta ->
+        var name by remember(meta.id) { mutableStateOf(meta.title) }
+        GlassDialog(
+            onDismiss = { renameTarget = null }, title = stringResource(R.string.ai_rename_title),
+            confirm = stringResource(R.string.common_save),
+            onConfirm = { session.renameChat(meta, name); renameTarget = null },
+            dismiss = stringResource(R.string.common_cancel),
+        ) {
+            GlassTextField(name, { name = it }, stringResource(R.string.ai_rename_title))
+        }
+    }
+    deleteTarget?.let { meta ->
+        GlassDialog(
+            onDismiss = { deleteTarget = null }, title = stringResource(R.string.ai_delete_chat),
+            confirm = stringResource(R.string.ai_delete_chat),
+            onConfirm = { session.deleteChat(meta); deleteTarget = null },
+            dismiss = stringResource(R.string.common_cancel),
+        ) {
+            Text(stringResource(R.string.ai_delete_chat_body), style = ClearType.Body, color = c.inkSoft)
         }
     }
 }

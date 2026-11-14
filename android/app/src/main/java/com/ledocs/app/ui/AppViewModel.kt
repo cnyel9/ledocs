@@ -2655,7 +2655,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Asisten AI (opsional): saklar, provider, dan key terenkripsi; layarnya terbuka di atas segalanya. */
     val aiStore = com.ledocs.app.ai.AiStore(app)
-    val aiSession = com.ledocs.app.ai.AiSession(aiStore, viewModelScope, { engine }, app.filesDir)
+    val aiSession = com.ledocs.app.ai.AiSession(aiStore, viewModelScope, { engine }, app.filesDir) { uri -> files.workingCopy(uri) }
     var aiOpen by mutableStateOf(false)
 
     /** The file whose "..." sheet is open, and whether it was opened from Recent. */
