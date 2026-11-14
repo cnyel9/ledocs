@@ -4,19 +4,17 @@ jobs:
   dbg:
     runs-on: ubuntu-24.04
     steps:
-      - name: Cek keystore dan secret
+      - name: Cek baca kunci privat
         env:
           KEYSTORE_BASE64: ${{ secrets.LEDOCS_UPLOAD_STORE_FILE_BASE64 }}
           SP: ${{ secrets.LEDOCS_UPLOAD_STORE_PASSWORD }}
           KP: ${{ secrets.LEDOCS_UPLOAD_KEY_PASSWORD }}
           AL: ${{ secrets.LEDOCS_UPLOAD_KEY_ALIAS }}
         run: |
-          echo "panjang base64: ${#KEYSTORE_BASE64}"
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > /tmp/k.p12
-          echo "ukuran berkas: $(wc -c < /tmp/k.p12)"
-          echo "panjang store password: ${#SP}"
-          echo "panjang key password: ${#KP}"
-          echo "alias: $AL"
-          keytool -list -keystore /tmp/k.p12 -storepass "$SP" -v 2>&1 | grep -i "SHA256\|Alias\|Keystore type" || echo "KEYTOOL LIST GAGAL"
-          if [ "$SP" = "$KP" ]; then echo "store password == key password: YA"; else echo "store password == key password: TIDAK"; fi
-          rm -f /tmp/k.p12
+          if keytool -certreq -keystore /tmp/k.p12 -alias "$AL" -storepass "$SP" -keypass "$KP" -file /tmp/out.csr 2>/tmp/err.txt; then
+            echo "CERTREQ OK: kunci privat terbaca di runner"
+          else
+            echo "CERTREQ GAGAL:"; cat /tmp/err.txt
+          fi
+          rm -f /tmp/k.p12 /tmp/out.csr
