@@ -157,12 +157,13 @@ private fun Shell(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: 
             bars.isAppearanceLightNavigationBars = !c.dark
         }
     }
-    BackHandler(enabled = doc != null && vm.toolScreen == null) { vm.closeDocument() }
+    BackHandler(enabled = doc != null && vm.toolScreen == null && !vm.aiOpen) { vm.closeDocument() }
     BackHandler(enabled = doc == null && vm.onboarded && !vm.settingsOpen && vm.openNote == null && vm.homeTab != HomeTab.Home && vm.toolScreen == null) { vm.homeTab = HomeTab.Home }
     BackHandler(enabled = vm.editingPhoto != null) { vm.editingPhoto = null }
 
     val route = when {
         !vm.onboarded -> "welcome"
+        vm.aiOpen -> "ai"
         vm.settingsOpen -> "settings"
         vm.openNote != null -> "note:" + vm.openNote
         else -> vm.homeTab.name
@@ -195,6 +196,7 @@ private fun Shell(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: 
                 RouteHost(route) { r ->
                     when {
                         r == "welcome" -> Onboarding(vm)
+                        r == "ai" -> com.ledocs.app.ai.AiScreen(vm)
                         r == "settings" -> SettingsScreen(vm)
                         r.startsWith("note:") -> NoteEditor(vm, r.removePrefix("note:"))
                         r == HomeTab.Files.name -> FilesScreen(vm, onBrowse)
@@ -214,8 +216,9 @@ private fun Shell(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: 
                     vm.expandingPreview = false
                 }
             }
-            // the document rises over the desk (translation and a cheap fade: no scaling, no layer)
-            Reveal(doc, reveal) { Viewer(vm, it) }
+            // the document rises over the desk (translation and a cheap fade: no scaling, no layer);
+            // while the AI screen is up the document rests beneath it, still open
+            Reveal(if (vm.aiOpen) null else doc, reveal) { Viewer(vm, it) }
             // a tool's own screen opens over whatever it was started from: the desk or a document
             Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
                 vm.toolScreen?.let { ToolScreenHost(vm, it) }
@@ -299,6 +302,7 @@ private fun depth(route: String): Int = when {
     route == "welcome" || route == HomeTab.Home.name -> 0
     route.startsWith("note:") -> 2
     route == "settings" -> 2
+    route == "ai" -> 2
     else -> 1
 }
 

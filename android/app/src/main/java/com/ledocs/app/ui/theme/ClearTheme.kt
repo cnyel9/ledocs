@@ -259,6 +259,7 @@ object ClearType {
     val BodyStrong = Body.copy(fontWeight = FontWeight.SemiBold)
     val Label = TextStyle(fontFamily = Jakarta, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 18.sp)
     val Caption = TextStyle(fontFamily = Jakarta, fontWeight = FontWeight.Normal, fontSize = 11.5.sp, lineHeight = 15.sp)
+    val CaptionStrong = Caption.copy(fontWeight = FontWeight.SemiBold)
 }
 
 /** A hero title's soft glow, so white type reads on the pale sky. */

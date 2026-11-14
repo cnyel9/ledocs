@@ -1,8 +1,8 @@
 # LeDocs
 
-### Pembaca dan penyunting PDF serta dokumen Office untuk Android. Gratis, tanpa iklan, tanpa akun, tanpa internet.
+### Pembaca dan penyunting PDF serta dokumen Office untuk Android. Gratis, tanpa iklan, tanpa akun. Offline secara bawaan, online hanya atas perintah Anda.
 
-Baca, tanda tangani, dan sunting PDF, buka dan sunting berkas Word dan Excel, tampilkan PowerPoint, serta simpan catatan, daftar tugas, foto, dan memo suara dalam satu tempat. Semuanya berjalan di perangkat Anda: LeDocs **tidak memiliki izin internet sama sekali**, tanpa pelacak dan tanpa sistem akun. Dokumen Anda tidak pernah meninggalkan perangkat Anda.
+Baca, tanda tangani, dan sunting PDF, buka dan sunting berkas Word dan Excel, tampilkan PowerPoint, serta simpan catatan, daftar tugas, foto, dan memo suara dalam satu tempat. Semua fitur dokumen berjalan sepenuhnya di perangkat Anda, tanpa pelacak dan tanpa sistem akun. Dokumen Anda tidak pernah meninggalkan perangkat Anda, kecuali teks yang Anda sendiri kirimkan ke Asisten AI bila Anda menyalakan fitur opsional itu.
 
 Antarmuka LeDocs sepenuhnya berbahasa Indonesia dengan latar gelap hitam.
 
@@ -39,7 +39,6 @@ APK rilis diterbitkan di halaman [Releases](https://github.com/cnyel9/ledocs/rel
 | APK | Untuk |
 | --- | --- |
 | `LeDocs-v<versi>.apk` (arm64-v8a) | Sebagian besar ponsel dan tablet ARM 64-bit saat ini |
-| `LeDocs-v<versi>-armeabi-v7a.apk` | Perangkat ARM 32-bit |
 
 ## Teknologi
 
@@ -74,7 +73,7 @@ Struktur proyek: `android/` aplikasi, `engine/` mesin Rust, `fastlane/` teks eta
 
 ## Privasi
 
-LeDocs tidak menyatakan izin `INTERNET`, jadi aplikasi ini memang tidak bisa menjangkau jaringan sama sekali. LeDocs juga tidak menyatakan izin penyimpanan atau kamera: berkas datang lewat pemilih sistem dan aplikasi kamera sistem. Lihat `PRIVACY.md`.
+Izin `INTERNET` hanya dipakai Asisten AI, fitur opsional yang mati secara bawaan: pertanyaan dan teks dokumen yang Anda lampirkan dikirim langsung dari perangkat Anda ke provider pilihan Anda, tidak pernah lewat server pengembang. Di luar fitur itu aplikasi tidak melakukan panggilan jaringan apa pun. LeDocs juga tidak menyatakan izin penyimpanan atau kamera: berkas datang lewat pemilih sistem dan aplikasi kamera sistem. Lihat `PRIVACY.md`.
 
 ## Lisensi
 

@@ -1,0 +1,255 @@
+package com.ledocs.app.ui.desk
+
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import com.ledocs.app.R
+import com.ledocs.app.ai.AiClient
+import com.ledocs.app.ai.AiPresets
+import com.ledocs.app.ai.AiProvider
+import com.ledocs.app.ui.AppViewModel
+import com.ledocs.app.ui.LucideIcons
+import com.ledocs.app.ui.glass.GlassDialog
+import com.ledocs.app.ui.glass.GlassPill
+import com.ledocs.app.ui.glass.GlassTextField
+import com.ledocs.app.ui.theme.Candy
+import com.ledocs.app.ui.theme.ClearType
+import com.ledocs.app.ui.theme.clear
+import java.util.UUID
+import kotlinx.coroutines.launch
+
+/** Pengaturan Asisten AI: saklar utama, provider siap pakai, provider kustom, dan API key. */
+@Composable
+fun AiSettingsPage(vm: AppViewModel, onBack: () -> Unit) {
+    val c = clear
+    val store = vm.aiStore
+    var editing by remember { mutableStateOf<AiProvider?>(null) }
+    var creating by remember { mutableStateOf(false) }
+    var confirmWipe by remember { mutableStateOf(false) }
+    val draft = remember { AiProvider(id = "custom-" + UUID.randomUUID().toString(), name = "", baseUrl = "", model = "") }
+    // Dibaca di badan composable (bukan di dalam DSL LazyColumn) supaya perubahan provider
+    // memicu recomposition dengan benar.
+    val providersNow = store.providers
+    val missing = AiPresets.all.filter { preset -> providersNow.none { it.id == preset.id } }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
+        item { Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars)) }
+        item {
+            Spacer(Modifier.height(14.dp))
+            ScreenHeader(null, stringResource(R.string.ai_providers_title), onBack = onBack)
+            Text(stringResource(R.string.ai_providers_body), style = ClearType.Body, color = c.inkSoft, modifier = Modifier.padding(horizontal = 30.dp, vertical = 10.dp))
+        }
+        item { Section(stringResource(R.string.ai_title)) }
+        item {
+            Panel {
+                ToggleRow(LucideIcons.Sparkles, Candy.Sky, stringResource(R.string.ai_toggle_label), stringResource(R.string.ai_settings_body), store.enabled, first = true) { store.setEnabled(it) }
+            }
+        }
+        if (providersNow.isNotEmpty()) {
+            item { Section(stringResource(R.string.ai_providers_row)) }
+            item {
+                Panel {
+                    providersNow.forEachIndexed { i, p ->
+                        val status = buildString {
+                            if (store.active?.id == p.id) append(stringResource(R.string.ai_provider_active)).append(" · ")
+                            append(
+                                when {
+                                    p.keyOptional -> stringResource(R.string.ai_provider_no_key_needed)
+                                    store.hasKey(p.id) -> stringResource(R.string.ai_provider_key_saved)
+                                    else -> stringResource(R.string.ai_provider_key_missing)
+                                },
+                            )
+                        }
+                        SettingRow(LucideIcons.Sparkles, Candy.Sky, p.name, { editing = p }, value = status, chevron = true, first = i == 0)
+                    }
+                }
+            }
+        }
+        if (missing.isNotEmpty()) {
+            item { Section(stringResource(R.string.ai_provider_add_preset)) }
+            item {
+                Panel {
+                    missing.forEachIndexed { i, preset ->
+                        SettingRow(
+                            LucideIcons.Plus, Candy.Mint,
+                            preset.name + (preset.tag?.let { " · $it" } ?: ""),
+                            { store.upsert(preset); editing = preset },
+                            value = preset.model, chevron = true, first = i == 0,
+                        )
+                    }
+                }
+            }
+        }
+        item { Section(stringResource(R.string.ai_provider_add_custom)) }
+        item {
+            Panel {
+                SettingRow(LucideIcons.Plus, Candy.Grape, stringResource(R.string.ai_provider_add_custom), { creating = true }, first = true)
+            }
+        }
+        item {
+            Spacer(Modifier.height(18.dp))
+            Panel {
+                SettingRow(LucideIcons.Trash2, Candy.Tomato, stringResource(R.string.ai_delete_data), { confirmWipe = true }, first = true)
+            }
+        }
+        item { Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars)) }
+    }
+    if (confirmWipe) {
+        GlassDialog(
+            onDismiss = { confirmWipe = false }, title = stringResource(R.string.ai_delete_data), icon = LucideIcons.Trash2, accent = Candy.Tomato,
+            confirm = stringResource(R.string.ai_delete_data),
+            onConfirm = {
+                store.wipeAll()
+                vm.aiSession.wipePersisted()
+                confirmWipe = false
+            },
+            dismiss = stringResource(R.string.common_cancel),
+        ) { Text(stringResource(R.string.ai_delete_data_body), style = ClearType.Body, color = c.inkSoft) }
+    }
+    editing?.let { p ->
+        AiProviderDialog(vm, p, isNew = false) { editing = null }
+    }
+    if (creating) {
+        AiProviderDialog(vm, draft, isNew = true) { creating = false }
+    }
+}
+
+/** Formulir satu provider: nama, base URL, model, API key tersamar, uji koneksi, dan hapus. */
+@Composable
+private fun AiProviderDialog(vm: AppViewModel, initial: AiProvider, isNew: Boolean, onClose: () -> Unit) {
+    val c = clear
+    val store = vm.aiStore
+    val uri = LocalUriHandler.current
+    val scope = rememberCoroutineScope()
+    var name by remember(initial.id) { mutableStateOf(initial.name) }
+    var baseUrl by remember(initial.id) { mutableStateOf(initial.baseUrl) }
+    var model by remember(initial.id) { mutableStateOf(initial.model) }
+    var keyField by remember(initial.id) { mutableStateOf("") }
+    var testState by remember(initial.id) { mutableStateOf<String?>(null) }
+    var testing by remember(initial.id) { mutableStateOf(false) }
+    var saveError by remember(initial.id) { mutableStateOf<String?>(null) }
+    val fallbackName = stringResource(R.string.ai_provider_custom_name)
+    val errBadUrl = stringResource(R.string.ai_base_url_invalid)
+    val errKeyFail = stringResource(R.string.ai_key_save_failed)
+
+    fun current(): AiProvider = initial.copy(
+        name = name.trim().ifBlank { fallbackName },
+        baseUrl = baseUrl.trim(),
+        model = model.trim(),
+    )
+
+    GlassDialog(
+        onDismiss = onClose,
+        title = if (isNew) stringResource(R.string.ai_provider_add_custom) else stringResource(R.string.ai_provider_edit),
+        icon = LucideIcons.Sparkles, accent = Candy.Sky,
+        confirm = stringResource(R.string.common_save),
+        onConfirm = {
+            val raw = current()
+            val normalized = AiClient.validateBaseUrl(raw.baseUrl)
+            when {
+                normalized == null -> saveError = errBadUrl
+                keyField.isNotBlank() && !store.setKey(raw.id, keyField.trim()) -> saveError = errKeyFail
+                else -> {
+                    store.upsert(raw.copy(baseUrl = normalized))
+                    onClose()
+                }
+            }
+        },
+        dismiss = stringResource(R.string.common_cancel),
+    ) {
+        GlassTextField(name, { name = it }, stringResource(R.string.ai_provider_name))
+        Spacer(Modifier.height(10.dp))
+        GlassTextField(baseUrl, { baseUrl = it }, stringResource(R.string.ai_provider_base_url))
+        Spacer(Modifier.height(10.dp))
+        GlassTextField(model, { model = it }, stringResource(R.string.ai_provider_model))
+        Spacer(Modifier.height(10.dp))
+        GlassTextField(
+            keyField, { keyField = it },
+            if (!isNew && store.hasKey(initial.id)) stringResource(R.string.ai_provider_api_key_hint) else stringResource(R.string.ai_provider_api_key),
+            password = true,
+        )
+        saveError?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = ClearType.Caption, color = Candy.Tomato)
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth()) {
+            GlassPill(
+                onClick = {
+                    when {
+                        !store.enabled -> testState = "needs_enabled"
+                        else -> {
+                            val raw = current()
+                            val normalized = AiClient.validateBaseUrl(raw.baseUrl)
+                            if (normalized == null) {
+                                testState = "bad_url"
+                            } else {
+                                testing = true
+                                testState = null
+                                // Key tersimpan hanya dikirim ke base URL yang sama dengan yang
+                                // tersimpan; URL hasil editan yang belum disimpan tidak boleh
+                                // menerima key milik URL lama.
+                                val key = keyField.trim().takeIf { it.isNotBlank() }
+                                    ?: if (baseUrl.trim().trimEnd('/') == initial.baseUrl.trimEnd('/')) store.key(initial.id) else null
+                                scope.launch {
+                                    val err = AiClient().testConnection(raw.copy(baseUrl = normalized), key)
+                                    testing = false
+                                    testState = if (err == null) "ok" else err
+                                }
+                            }
+                        }
+                    }
+                },
+                height = 40.dp, label = stringResource(R.string.ai_provider_test),
+            ) { Text(stringResource(R.string.ai_provider_test), style = ClearType.CaptionStrong, color = c.ink) }
+            if (initial.keyUrl != null) {
+                Spacer(Modifier.width(8.dp))
+                GlassPill(onClick = { uri.openUri(initial.keyUrl) }, height = 40.dp, label = stringResource(R.string.ai_provider_get_key)) {
+                    Text(stringResource(R.string.ai_provider_get_key), style = ClearType.CaptionStrong, color = c.ink)
+                }
+            }
+        }
+        when {
+            testing -> Text(stringResource(R.string.ai_provider_testing), style = ClearType.Caption, color = c.inkSoft, modifier = Modifier.padding(top = 10.dp))
+            testState == "ok" -> Text(stringResource(R.string.ai_provider_test_ok), style = ClearType.Caption, color = Candy.Mint, modifier = Modifier.padding(top = 10.dp))
+            testState == "needs_enabled" -> Text(stringResource(R.string.ai_test_needs_enabled), style = ClearType.Caption, color = Candy.Tomato, modifier = Modifier.padding(top = 10.dp))
+            testState == "bad_url" -> Text(stringResource(R.string.ai_base_url_invalid), style = ClearType.Caption, color = Candy.Tomato, modifier = Modifier.padding(top = 10.dp))
+            testState != null -> Text(stringResource(R.string.ai_provider_test_fail, testState!!), style = ClearType.Caption, color = Candy.Tomato, modifier = Modifier.padding(top = 10.dp))
+        }
+        if (!isNew) {
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth()) {
+                if (store.active?.id != initial.id) {
+                    GlassPill(onClick = { store.setActive(initial.id); onClose() }, height = 40.dp, label = stringResource(R.string.ai_provider_make_active)) {
+                        Text(stringResource(R.string.ai_provider_make_active), style = ClearType.CaptionStrong, color = c.ink)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                GlassPill(onClick = { store.remove(initial.id); onClose() }, height = 40.dp, label = stringResource(R.string.ai_provider_delete)) {
+                    Text(stringResource(R.string.ai_provider_delete), style = ClearType.CaptionStrong, color = Candy.Tomato)
+                }
+            }
+        }
+    }
+}

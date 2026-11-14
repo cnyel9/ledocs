@@ -348,6 +348,7 @@ fun QuickToolbar(
     onTool: (QuickTool) -> Unit,
     moreTools: List<QuickTool> = emptyList(),
     onCustomize: ((Rect) -> Unit)? = null,
+    onAi: (() -> Unit)? = null,
 ) {
     val slots = dockSlots(LocalConfiguration.current.screenWidthDp)
     val shown = tools.take(slots)
@@ -373,7 +374,7 @@ fun QuickToolbar(
         }
         // Office documents have their own concise toolbar. PDFs use the menu for the remaining
         // tools rather than opening the old grid sheet.
-        if (overflow.isNotEmpty() || onCustomize != null) GlassCircle(
+        if (overflow.isNotEmpty() || onCustomize != null || onAi != null) GlassCircle(
             onClick = { menuAt = moreRect },
             size = 60.dp,
             label = stringResource(R.string.common_tool_more_tools),
@@ -384,6 +385,7 @@ fun QuickToolbar(
     }
     menuAt?.let { anchor ->
         GlassMenu(anchor, { menuAt = null }, buildList {
+            if (onAi != null) add(GlassMenuItem(stringResource(R.string.ai_ask_this_doc), LucideIcons.Sparkles) { onAi() })
             overflow.forEach { tool -> add(GlassMenuItem(stringResource(tool.title), tool.icon) { onTool(tool) }) }
             if (onCustomize != null) add(GlassMenuItem(stringResource(R.string.toolbar_customize), LucideIcons.SlidersHorizontal) { onCustomize(anchor) })
         })

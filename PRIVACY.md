@@ -4,15 +4,24 @@
 
 **Pengembang:** Levi Setiadi
 
-LeDocs adalah aplikasi dokumen, catatan, dan foto yang bekerja sepenuhnya di perangkat Anda.
+LeDocs adalah aplikasi dokumen, catatan, dan foto yang bekerja di perangkat Anda. Offline secara bawaan: online hanya atas perintah Anda, lewat satu fitur opsional di bawah ini.
 
 ## Apa yang dikumpulkan LeDocs
 
-Tidak ada. LeDocs tidak memiliki sistem akun, iklan, analitik, maupun pelaporan kerusakan. Kami tidak menjalankan server yang menerima berkas, catatan, rekaman, foto, atau apa pun tentang cara Anda memakai aplikasi ini.
+Tidak ada. LeDocs tidak memiliki sistem akun, iklan, analitik, maupun pelaporan kerusakan. Kami tidak menjalankan server yang menerima berkas, catatan, rekaman, foto, atau apa pun tentang cara Anda memakai aplikasi ini. Fitur online opsional di bawah mengirim data ke layanan pihak ketiga yang Anda pilih, bukan ke kami.
 
 ## Akses jaringan
 
-LeDocs tidak meminta izin `INTERNET` milik Android, jadi aplikasi ini tidak bisa menjangkau jaringan. Setiap dokumen (PDF, Word, Excel, PowerPoint), catatan, daftar, memo suara, dan foto dibuka, disunting, dan disimpan di perangkat Anda oleh mesin LeDocs sendiri. Pengenalan teks (OCR) berjalan di perangkat Anda dengan model yang disertakan di dalam aplikasi.
+Setiap dokumen (PDF, Word, Excel, PowerPoint), catatan, daftar, memo suara, dan foto dibuka, disunting, dan disimpan di perangkat Anda oleh mesin LeDocs sendiri. Pengenalan teks (OCR) berjalan di perangkat Anda dengan model yang disertakan di dalam aplikasi. Semua fitur dokumen bekerja sepenuhnya tanpa internet, termasuk dalam mode pesawat.
+
+Satu satunya pemakai jaringan adalah **Asisten AI**, fitur opsional yang **mati secara bawaan** dan hanya bekerja setelah Anda menyalakannya di Pengaturan:
+
+- Bila Anda bertanya kepada Asisten AI, teks pertanyaan Anda dan, bila Anda melampirkan dokumen yang sedang terbuka, teks hasil ekstraksi dokumen itu dikirim **langsung dari perangkat Anda ke provider yang Anda pilih** (host yang tertulis di pengaturan provider, misalnya openrouter.ai, api.deepseek.com, atau server Anda sendiri). Tidak ada server perantara milik pengembang.
+- API key Anda tersimpan terenkripsi di perangkat dengan Android Keystore, hanya dikirim ke provider pemiliknya, tidak pernah ke pengembang, dan tidak pernah ditulis ke log.
+- Sebelum pengiriman pertama yang melampirkan dokumen ke sebuah provider, aplikasi menampilkan tujuan dan isi yang akan dikirim, dan meminta persetujuan Anda. Menyalakan Asisten AI tidak mengirim apa pun dengan sendirinya.
+- Mematikan Asisten AI menghentikan seluruh lalu lintas fitur ini. Riwayat obrolan tersimpan hanya di perangkat Anda.
+
+Di luar Asisten AI, aplikasi tidak melakukan panggilan jaringan apa pun: tidak ada pemeriksaan latar belakang, sinkronisasi, atau telemetri.
 
 ## Berkas dan izin
 

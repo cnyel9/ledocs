@@ -283,11 +283,12 @@ private fun DeskHeader(vm: AppViewModel) {
         ) { FourDots(androidx.compose.ui.graphics.Color.Unspecified) }
     }
     if (menu) {
-        GlassMenu(anchor, { menu = false }, listOf(
-            GlassMenuItem(stringResource(R.string.home_tab_files), LucideIcons.FolderOpen) { vm.homeTab = HomeTab.Files },
-            GlassMenuItem(stringResource(R.string.home_tab_tools), LucideIcons.LayoutGrid) { vm.homeTab = HomeTab.Tools },
-            GlassMenuItem(stringResource(R.string.home_settings), LucideIcons.Settings) { vm.settingsOpen = true },
-        ))
+        GlassMenu(anchor, { menu = false }, buildList {
+            if (vm.aiStore.enabled) add(GlassMenuItem(stringResource(R.string.ai_title), LucideIcons.Sparkles) { vm.aiOpen = true })
+            add(GlassMenuItem(stringResource(R.string.home_tab_files), LucideIcons.FolderOpen) { vm.homeTab = HomeTab.Files })
+            add(GlassMenuItem(stringResource(R.string.home_tab_tools), LucideIcons.LayoutGrid) { vm.homeTab = HomeTab.Tools })
+            add(GlassMenuItem(stringResource(R.string.home_settings), LucideIcons.Settings) { vm.settingsOpen = true })
+        })
     }
 }
 

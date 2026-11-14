@@ -112,19 +112,21 @@ fun SettingsScreen(vm: AppViewModel) {
             "glass" -> GlassMotionPage { page = "root" }
             "read-aloud-language" -> ReadAloudLanguagePage { page = "root" }
             "app-language" -> AppLanguagePage { page = "root" }
+            "ai" -> AiSettingsPage(vm) { page = "root" }
             else -> SettingsRoot(
                 vm,
                 openLicences = { page = "licences" },
                 openGlass = { page = "glass" },
                 openReadAloudLanguage = { page = "read-aloud-language" },
                 openAppLanguage = { page = "app-language" },
+                openAi = { page = "ai" },
             )
         }
     }
 }
 
 @Composable
-private fun SettingsRoot(vm: AppViewModel, openLicences: () -> Unit, openGlass: () -> Unit, openReadAloudLanguage: () -> Unit, openAppLanguage: () -> Unit) {
+private fun SettingsRoot(vm: AppViewModel, openLicences: () -> Unit, openGlass: () -> Unit, openReadAloudLanguage: () -> Unit, openAppLanguage: () -> Unit, openAi: () -> Unit) {
     val c = clear
     val context = LocalContext.current
     val nightModeDefault = remember(vm.prefsChanged) { vm.savedNightMode }
@@ -178,6 +180,14 @@ private fun SettingsRoot(vm: AppViewModel, openLicences: () -> Unit, openGlass: 
                 )
                 ToggleRow(LucideIcons.TextCursorInput, Candy.Tangerine, stringResource(R.string.home_offer_suggestions), null, vm.formSuggestions) { vm.updateFormSuggestions(it) }
                 SettingRow(LucideIcons.BrushCleaning, Candy.Tomato, stringResource(R.string.home_clear_suggestions), { vm.clearFormSuggestions() })
+            }
+        }
+
+        item(key = "ai") { Section(stringResource(R.string.ai_title)) }
+        item(key = "aipanel") {
+            Panel {
+                ToggleRow(LucideIcons.Sparkles, Candy.Sky, stringResource(R.string.ai_toggle_label), stringResource(R.string.ai_settings_body), vm.aiStore.enabled, first = true) { vm.aiStore.setEnabled(it) }
+                SettingRow(LucideIcons.Lock, Candy.Grape, stringResource(R.string.ai_providers_row), openAi, value = vm.aiStore.active?.name, chevron = true)
             }
         }
 

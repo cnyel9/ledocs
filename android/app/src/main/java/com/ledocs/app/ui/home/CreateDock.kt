@@ -375,14 +375,15 @@ private fun BoxScope.Fan(vm: AppViewModel, desk: DeskState, open: Boolean, onBro
         desk.fanOpen = false
         f()
     }
-    val items = listOf(
-        FanItem(LucideIcons.SquarePen, stringResource(R.string.create_note), Candy.Sky, go { vm.newNote(NoteKind.Text) }),
-        FanItem(LucideIcons.ListChecks, stringResource(R.string.create_list), Candy.Mint, go { vm.newNote(NoteKind.List) }),
-        FanItem(ToolCatalog.Scan.icon, stringResource(ToolCatalog.Scan.label), Candy.Tomato, go { ToolCatalog.Scan.go(vm) }),
-        FanItem(LucideIcons.FolderOpen, stringResource(R.string.home_open_file), Candy.Grape, go(onBrowse)),
-        FanItem(LucideIcons.Images, stringResource(R.string.desk_photos_to_pdf), Candy.Tangerine, go { vm.pickPhotosToPdf() }),
-        FanItem(LucideIcons.Combine, stringResource(R.string.common_tool_combine), Candy.Bubblegum, go { vm.pickFiles(FilePickKind.Combine) }),
-    )
+    val items = buildList {
+        add(FanItem(LucideIcons.SquarePen, stringResource(R.string.create_note), Candy.Sky, go { vm.newNote(NoteKind.Text) }))
+        if (vm.aiStore.enabled) add(FanItem(LucideIcons.Sparkles, stringResource(R.string.ai_fan_label), Candy.Sky, go { vm.aiOpen = true }))
+        add(FanItem(LucideIcons.ListChecks, stringResource(R.string.create_list), Candy.Mint, go { vm.newNote(NoteKind.List) }))
+        add(FanItem(ToolCatalog.Scan.icon, stringResource(ToolCatalog.Scan.label), Candy.Tomato, go { ToolCatalog.Scan.go(vm) }))
+        add(FanItem(LucideIcons.FolderOpen, stringResource(R.string.home_open_file), Candy.Grape, go(onBrowse)))
+        add(FanItem(LucideIcons.Images, stringResource(R.string.desk_photos_to_pdf), Candy.Tangerine, go { vm.pickPhotosToPdf() }))
+        add(FanItem(LucideIcons.Combine, stringResource(R.string.common_tool_combine), Candy.Bubblegum, go { vm.pickFiles(FilePickKind.Combine) }))
+    }
     val haptics = LocalHaptics.current
     LaunchedEffect(open) { if (open) { delay(60); haptics?.cascade(items.size) } }
     Column(

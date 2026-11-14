@@ -198,7 +198,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     LaunchedEffect(ctl.barsVisible) { if (!ctl.barsVisible) zoomButtons.hide() }
     val canvasLook = CanvasLook(background = c.desk, pageShadow = c.pageEdge, invert = ctl.nightMode)
 
-    BackHandler(enabled = ctl.searching || ctl.tool != ViewerTool.None || selection.selection != null) {
+    BackHandler(enabled = !vm.aiOpen && (ctl.searching || ctl.tool != ViewerTool.None || selection.selection != null)) {
         when {
             selection.selection != null -> selection.clear()
             ctl.searching -> closeSearch(doc)
@@ -456,6 +456,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                                 moreToolsMenuAnchor = anchor
                                 ctl.sheet = ViewerSheet.MoreTools
                             }),
+                            onAi = if (vm.aiStore.enabled) ({ vm.aiOpen = true }) else null,
                         )
                     } else {
                         ToolSubToolbar(vm, doc)

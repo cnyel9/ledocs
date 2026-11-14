@@ -1,4 +1,4 @@
-LeDocs adalah pembaca dan penyunting PDF serta dokumen Office untuk Android. Gratis, tanpa iklan, tanpa akun, dan sepenuhnya offline: LeDocs tidak memiliki izin internet sama sekali, jadi dokumenmu tidak pernah meninggalkan ponselmu.
+LeDocs adalah pembaca dan penyunting PDF serta dokumen Office untuk Android. Gratis, tanpa iklan, tanpa akun, dan offline secara bawaan: semua fitur dokumen berjalan di ponselmu, dan dokumenmu tidak pernah meninggalkan ponselmu kecuali teks yang kamu sendiri kirimkan ke Asisten AI bila kamu menyalakan fitur opsional itu.
 
 Semua dalam satu tempat
 * PDF, catatan, daftar tugas, foto, dan memo suara tampil berdampingan sebagai kartu

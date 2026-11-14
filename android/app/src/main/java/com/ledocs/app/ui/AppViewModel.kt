@@ -2653,6 +2653,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var homeTab by mutableStateOf(com.ledocs.app.ui.home.HomeTab.Home)
     var settingsOpen by mutableStateOf(false)
 
+    /** Asisten AI (opsional): saklar, provider, dan key terenkripsi; layarnya terbuka di atas segalanya. */
+    val aiStore = com.ledocs.app.ai.AiStore(app)
+    val aiSession = com.ledocs.app.ai.AiSession(aiStore, viewModelScope, { engine }, app.filesDir)
+    var aiOpen by mutableStateOf(false)
+
     /** The file whose "..." sheet is open, and whether it was opened from Recent. */
     var fileSheet by mutableStateOf<Pair<com.ledocs.app.ui.home.FileRow, Boolean>?>(null)
     var showLicences by mutableStateOf(false)

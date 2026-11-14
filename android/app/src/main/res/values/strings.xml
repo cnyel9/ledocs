@@ -1428,7 +1428,7 @@
     <string name="welcome_promise_body">LeDocs gratis dan sumber terbuka, untuk semua orang.</string>
     <string name="welcome_promise_1">Tanpa iklan, selamanya</string>
     <string name="welcome_promise_2">Tidak perlu membuat akun</string>
-    <string name="welcome_promise_3">Berkas Anda tidak pernah meninggalkan perangkat Anda</string>
+    <string name="welcome_promise_3">Berkas Anda tinggal di perangkat Anda; online hanya atas perintah Anda</string>
     <string name="settings_show_welcome">Tampilkan sambutan lagi</string>
 
     <!-- Quick Preview: a file another app opens, shown in a floating card over that app -->
@@ -1513,4 +1513,74 @@
         <item>Kamu tidak dapat mengendalikan setiap gelombang, tetapi kamu bisa **memilih cara menyambutnya**. Napas yang tenang itu **menular**.</item>
         <item>Sebuah kalimat, sebuah sketsa, sebuah rak yang rapi. **Berkarya** mengingatkanmu bahwa kamu bisa **mengubah dunia di sekitarmu**, meski sedikit.</item>
     </string-array>
+
+    <!-- Asisten AI -->
+    <string name="ai_title">Asisten AI</string>
+    <string name="ai_settings_body">Opsional dan mati secara bawaan. Bila dinyalakan, teks yang Anda kirim pergi langsung dari perangkat ini ke provider yang Anda pilih, tidak pernah lewat server LeDocs. Semua fitur dokumen tetap offline.</string>
+    <string name="ai_providers_row">Provider dan model</string>
+    <string name="ai_providers_title">Provider dan Model</string>
+    <string name="ai_providers_body">Pilih provider siap pakai, atau tambahkan base URL Anda sendiri. API key tersimpan terenkripsi di perangkat ini dan hanya dikirim ke provider pemiliknya.</string>
+    <string name="ai_provider_active">Aktif</string>
+    <string name="ai_provider_key_saved">API key tersimpan</string>
+    <string name="ai_provider_key_missing">Belum ada API key</string>
+    <string name="ai_provider_no_key_needed">Tanpa API key</string>
+    <string name="ai_provider_make_active">Jadikan aktif</string>
+    <string name="ai_provider_edit">Ubah provider</string>
+    <string name="ai_provider_name">Nama</string>
+    <string name="ai_provider_base_url">Base URL</string>
+    <string name="ai_provider_model">Model</string>
+    <string name="ai_provider_api_key">API key</string>
+    <string name="ai_provider_api_key_hint">Sudah tersimpan. Isi hanya jika ingin mengganti.</string>
+    <string name="ai_provider_get_key">Dapatkan key gratis</string>
+    <string name="ai_provider_test">Uji koneksi</string>
+    <string name="ai_provider_testing">Menguji…</string>
+    <string name="ai_provider_test_ok">Koneksi berhasil. Provider menjawab.</string>
+    <string name="ai_provider_test_fail">Koneksi gagal: %1$s</string>
+    <string name="ai_provider_delete">Hapus provider</string>
+    <string name="ai_provider_add_preset">Tambah provider siap pakai</string>
+    <string name="ai_provider_add_custom">Tambah provider kustom</string>
+    <string name="ai_provider_custom_name">Provider kustom</string>
+    <string name="ai_provider_free">Gratis</string>
+    <string name="ai_provider_local">Lokal</string>
+    <string name="ai_context_preparing">Menyiapkan konteks dokumen…</string>
+    <string name="ai_fan_label">Tanya AI</string>
+    <string name="ai_consent_scope">Yang dikirim: pertanyaan Anda dan teks dari %1$s (%2$d halaman, sekitar %3$d karakter).</string>
+    <string name="ai_key_save_failed">API key tidak dapat disimpan terenkripsi di perangkat ini. Coba lagi.</string>
+    <string name="ai_base_url_invalid">Base URL tidak valid. Pakai https://, atau http:// hanya untuk server lokal (localhost).</string>
+    <string name="ai_test_needs_enabled">Nyalakan Asisten AI untuk menguji koneksi.</string>
+    <string name="ai_toggle_label">Gunakan Asisten AI</string>
+    <string name="ai_delete_data">Hapus semua data AI</string>
+    <string name="ai_delete_data_body">Semua provider, API key, persetujuan pengiriman, dan riwayat obrolan AI di perangkat ini akan dihapus. Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="ai_deleted">Data AI terhapus</string>
+    <string name="ai_no_provider">Belum ada provider. Tambahkan provider dulu di Pengaturan, Asisten AI.</string>
+    <string name="ai_open_settings">Buka Pengaturan AI</string>
+    <string name="ai_offline">Hidupkan internet untuk mengakses</string>
+    <string name="ai_offline_body">Asisten AI memakai internet. Riwayat obrolan Anda tidak ikut terkirim dan tetap bisa dibaca di sini.</string>
+    <string name="ai_context_doc">Dokumen ini</string>
+    <string name="ai_context_none">Tanpa dokumen</string>
+    <string name="ai_context_pages">%1$s, %2$d halaman</string>
+    <string name="ai_context_unavailable">Konteks dokumen ini belum bisa dibaca AI. Anda tetap bisa mengobrol bebas.</string>
+    <string name="ai_context_truncated">Dokumen panjang: yang dibaca AI adalah bagian awal sampai batas konteks.</string>
+    <string name="ai_detach">Lepaskan dokumen</string>
+    <string name="ai_attach_hint">Buka dokumen untuk bertanya tentang isinya, atau mengobrol bebas di sini.</string>
+    <string name="ai_input_hint">Tulis perintah atau pertanyaan…</string>
+    <string name="ai_send">Kirim</string>
+    <string name="ai_stop">Berhenti</string>
+    <string name="ai_stopped">(dihentikan)</string>
+    <string name="ai_interrupted">(terputus, ketuk Coba Lagi untuk melanjutkan)</string>
+    <string name="ai_retry">Coba Lagi</string>
+    <string name="ai_error_generic">Terjadi kesalahan. Coba lagi.</string>
+    <string name="ai_error_auth">API key ditolak provider. Periksa key di Pengaturan.</string>
+    <string name="ai_error_quota">Batas pemakaian model tercapai. Tunggu sebentar, atau ganti model atau provider.</string>
+    <string name="ai_error_network">Tidak dapat menjangkau provider. Periksa internet Anda.</string>
+    <string name="ai_suggest_summarize">Ringkas dokumen ini</string>
+    <string name="ai_suggest_main_points">Apa isi pokok dokumen ini?</string>
+    <string name="ai_suggest_letter">Buatkan draf surat lamaran kerja</string>
+    <string name="ai_suggest_explain">Jelaskan cara menggabungkan dua PDF</string>
+    <string name="ai_consent_title">Kirim teks ke provider?</string>
+    <string name="ai_consent_body">Pertanyaan Anda dan teks dokumen yang dilampirkan akan dikirim ke %1$s (model %2$s) untuk dijawab. LeDocs tidak menerima, menyimpan, atau meneruskan isi itu. Persetujuan ini berlaku untuk provider ini.</string>
+    <string name="ai_consent_send">Kirim</string>
+    <string name="ai_ask_this_doc">Tanya Dokumen Ini</string>
+    <string name="ai_new_chat">Obrolan baru</string>
+    <string name="ai_thinking">Sedang menjawab…</string>
 </resources>
