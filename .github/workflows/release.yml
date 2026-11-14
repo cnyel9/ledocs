@@ -97,7 +97,7 @@ jobs:
             echo "::warning::No release key: this dry run is signed with the debug key"
           fi
 
-      # Satu APK universal: kedua ABI ARM (64-bit dan 32-bit) di dalam satu berkas
+      # Satu APK tunggal: hanya arm64-v8a (64 bit), tanpa ABI 32 bit di dalamnya
       # LeDocs-v<version>.apk, ditandatangani kunci rilis supaya bisa diperbarui di tempat.
       - name: Build
         working-directory: android
@@ -108,7 +108,7 @@ jobs:
           LEDOCS_UPLOAD_KEY_PASSWORD: ${{ secrets.LEDOCS_UPLOAD_KEY_PASSWORD }}
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          gradle assembleRelease "-Pledocs.abis=arm64-v8a,armeabi-v7a" "-Pledocs.version=$VERSION" --no-daemon --no-configuration-cache
+          gradle assembleRelease "-Pledocs.abis=arm64-v8a" "-Pledocs.version=$VERSION" --no-daemon --no-configuration-cache
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/LeDocs-v$VERSION.apk"
 
       - name: APK
