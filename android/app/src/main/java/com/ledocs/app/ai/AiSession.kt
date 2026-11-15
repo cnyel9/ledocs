@@ -49,6 +49,10 @@ data class AiChatMeta(
     var pinned: Boolean,
     var updatedAt: Long,
     var style: String = "seimbang",
+    /** Satu baris bahasan berjalan ruangan ini (diperbarui otomatis dari isi percakapan). */
+    var topic: String? = null,
+    /** Jumlah jawaban asisten saat topik terakhir dibuat (rem pembuatan ulang). */
+    var topicAt: Int = 0,
 )
 
 /** Dokumen tambahan yang ditempel pengguna sebagai konteks selain dokumen yang terbuka. */
@@ -56,6 +60,9 @@ class AiExtraDoc(val name: String, val uriString: String) {
     var text: String? = null
     var failed by mutableStateOf(false)
     var loading by mutableStateOf(true)
+    /** Ukuran berkas sumber: bagian dari identitas berkas (nama + ukuran) untuk anti duplikat.
+     * State snapshot supaya saringan pemilih berkas ikut bereaksi begitu ukuran diketahui. */
+    var size by mutableStateOf(-1L)
 }
 
 /**
@@ -69,6 +76,9 @@ class AiReference(val name: String, val uriString: String, val isImage: Boolean)
     var imageFile: File? = null
     var failed by mutableStateOf(false)
     var loading by mutableStateOf(!isImage)
+    /** Ukuran berkas sumber: bagian dari identitas berkas (nama + ukuran) untuk anti duplikat.
+     * State snapshot supaya saringan pemilih berkas ikut bereaksi begitu ukuran diketahui. */
+    var size by mutableStateOf(-1L)
 }
 
 /** Gaya jawaban per obrolan: nama awam, suhu model, dan instruksi tambahan. */
@@ -88,6 +98,17 @@ sealed interface AiContext {
     data class Attached(val name: String, val pages: Int, val truncated: Boolean) : AiContext
     data object Unavailable : AiContext
 }
+
+/**
+ * Fase aktivitas nyata sesi, untuk label aktivitas di area jawaban (meniru label progres
+ * asisten: tulisannya mengikuti pekerjaan yang sedang benar benar berjalan, bukan generik).
+ * Reading = konteks dokumen sedang dibaca; Connecting = giliran mulai, permintaan disiapkan;
+ * Waiting = permintaan terkirim, token pertama belum tiba; Reasoning = aliran penalaran
+ * model sedang mengalir; Answering = teks jawaban sedang mengalir; Retrying = percobaan
+ * sebelumnya gagal sebelum token pertama dan sedang diulang; Switching = rantai berpindah
+ * ke provider cadangan.
+ */
+enum class AiPhase { Idle, Reading, Connecting, Waiting, Reasoning, Answering, Retrying, Switching }
 
 /**
  * Sesi obrolan Asisten AI. Konteks dokumen diambil lewat tool engine yang sudah ada
@@ -133,6 +154,34 @@ class AiSession(
     var referenceUnderstanding by mutableStateOf<String?>(null)
         private set
 
+    // ---- Label aktivitas (fase nyata sesi, dibaca lapisan layar) -------------------------------
+
+    var phase by mutableStateOf(AiPhase.Idle)
+        private set
+    /** Nama provider tujuan saat fase Switching. */
+    var phaseProvider by mutableStateOf<String?>(null)
+        private set
+    /** Nomor percobaan berikutnya saat fase Retrying. */
+    var phaseAttempt by mutableStateOf(0)
+        private set
+    /** Progres baca konteks dokumen Office: (halaman saat ini, total halaman). */
+    var readProgress by mutableStateOf<Pair<Int, Int>?>(null)
+        private set
+    /** Kapan giliran berjalan dimulai (jam dinding), untuk eskalasi label menunggu lama. */
+    var turnStartedAt by mutableStateOf(0L)
+        private set
+
+    // ---- Identitas dokumen yang menempel (untuk anti duplikat nama + ukuran) -------------------
+
+    var attachedName by mutableStateOf<String?>(null)
+        private set
+    var attachedSize by mutableStateOf(-1L)
+        private set
+    private var attachedFile: File? = null
+
+    /** Topik bahasan berjalan ruangan yang sedang terbuka (dari metadata obrolannya). */
+    val chatTopic: String? get() = currentMeta()?.topic
+
     /** Perkiraan jumlah karakter konteks yang akan ikut terkirim (meter dan pratinjau izin). */
     val contextChars: Int get() = (combinedContext?.length ?: 0) + (referenceContext?.length ?: 0)
     val contextFraction: Float get() = (contextChars / CONTEXT_BUDGET.toFloat()).coerceIn(0f, 1f)
@@ -142,6 +191,7 @@ class AiSession(
     private var attachJob: Job? = null
     private var followUpJob: Job? = null
     private var summaryJob: Job? = null
+    private var topicJob: Job? = null
     private var history = JSONArray()
     private var docContextText: String? = null
     private var combinedContext: String? = null
@@ -248,13 +298,24 @@ class AiSession(
         attachJob?.cancel()
         attachedDocId = doc.id
         attachedDocPath = path
+        attachedName = doc.name
+        attachedSize = runCatching { doc.file.length() }.getOrDefault(-1L)
+        attachedFile = doc.file
         preparing = true
+        // Fase Reading hanya ditulis bila tidak ada giliran yang berjalan: attach ulang
+        // dokumen yang sama di tengah giliran tidak boleh menimpa label aktivitas giliran.
+        if (!running) phase = AiPhase.Reading
+        readProgress = null
         val seq = ++attachSeq
         attachJob = scope.launch {
-            val built = attempt { buildContext(doc) }
+            val built = attempt {
+                buildContext(doc) { page, total -> if (seq == attachSeq) readProgress = page to total }
+            }
             // Balapan ganti dokumen: hasil attach lama tidak boleh menimpa konteks dokumen baru.
             if (seq != attachSeq || attachedDocId != doc.id) return@launch
             preparing = false
+            if (!running) phase = AiPhase.Idle
+            readProgress = null
             if (built != null) {
                 docContextText = built.first
                 context = AiContext.Attached(doc.name, doc.info.pages.size, built.second)
@@ -287,8 +348,13 @@ class AiSession(
         attachJob?.cancel()
         attachSeq++
         preparing = false
+        phase = AiPhase.Idle
+        readProgress = null
         attachedDocId = null
         attachedDocPath = null
+        attachedName = null
+        attachedSize = -1L
+        attachedFile = null
         docContextText = null
         context = AiContext.None
         summary = null
@@ -316,8 +382,10 @@ class AiSession(
         refreshSystemPrompt()
     }
 
-    /** Teks dokumen per halaman dengan penanda, dibatasi anggaran konteks. Null bila tidak terbaca. */
-    private suspend fun buildContext(doc: OpenDocument): Pair<String, Boolean>? {
+    /** Teks dokumen per halaman dengan penanda, dibatasi anggaran konteks. Null bila tidak terbaca.
+     * [onPage] melaporkan progres baca (halaman, total) untuk jalur Office yang memang membaca
+     * per halaman; jalur PDF mengekstrak sekaligus lewat tool, jadi tidak ada progres halaman. */
+    private suspend fun buildContext(doc: OpenDocument, onPage: (Int, Int) -> Unit = { _, _ -> }): Pair<String, Boolean>? {
         val eng = engineProvider() ?: return null
         val budget = CONTEXT_BUDGET
         var truncated = false
@@ -345,6 +413,7 @@ class AiSession(
         val sb = StringBuilder("<<<DOKUMEN: ${doc.name}>>>\n")
         var any = false
         for (index in 0 until doc.info.pages.size) {
+            onPage(index + 1, doc.info.pages.size)
             val t = attempt { eng.command { pagePlainText(doc.id, index.toUInt()) } }
             if (t.isNullOrBlank()) continue
             any = true
@@ -364,7 +433,26 @@ class AiSession(
         val extra = AiExtraDoc(name, uriString)
         extraDocs += extra
         scope.launch {
-            val built = attempt { buildExtraContext(uriString, name) }
+            val file = attempt { workingCopy(Uri.parse(uriString)) }
+            if (file == null) {
+                extra.loading = false
+                extra.failed = true
+                return@launch
+            }
+            extra.size = file.length()
+            // Kembaran yang GAGAL dibaca tidak menghalangi percobaan baru lewat alamat lain:
+            // yang gagal dibuang, percobaan baru menggantikannya.
+            extraDocs.firstOrNull { it !== extra && it.failed && it.name == name && it.size > 0 && it.size == extra.size }
+                ?.let { extraDocs.remove(it) }
+            // Berkas yang sama dengan dokumen yang sedang terbuka sudah menjadi konteks utama:
+            // tidak didaftarkan dua kali dan tidak dipaksa konversi selagi sesinya terbuka.
+            if (isAttachedFile(file, name) ||
+                extraDocs.any { it !== extra && it.name == name && it.size > 0 && it.size == extra.size }
+            ) {
+                extraDocs.remove(extra)
+                return@launch
+            }
+            val built = attempt { buildExtraContext(file, name) }
             extra.loading = false
             if (built == null) {
                 extra.failed = true
@@ -380,9 +468,20 @@ class AiSession(
         rebuildCombinedContext()
     }
 
-    private suspend fun buildExtraContext(uriString: String, name: String): String? {
+    /**
+     * True bila [file] adalah dokumen yang sedang terbuka: jalur kanonis sama, atau identitas
+     * nama + ukuran sama. Berkas yang sama bisa tiba lewat alamat berbeda antar daftar
+     * (Terakhir vs Di Perangkat), jadi pencocokan string URI saja tidak cukup.
+     */
+    private fun isAttachedFile(file: File, name: String): Boolean {
+        val byPath = attachedFile?.let { main ->
+            runCatching { file.canonicalPath == main.canonicalPath }.getOrDefault(false)
+        } ?: false
+        return byPath || (attachedName == name && attachedSize > 0 && attachedSize == file.length())
+    }
+
+    private suspend fun buildExtraContext(file: File, name: String): String? {
         val eng = engineProvider() ?: return null
-        val file = workingCopy(Uri.parse(uriString))
         val lower = name.lowercase()
         val opened: JSONObject = if (lower.endsWith(".pdf")) {
             attempt { eng.tool("doc_open", mapOf("path" to file.absolutePath)) } ?: return null
@@ -436,7 +535,25 @@ class AiSession(
         val ref = AiReference(name, uriString, isImage = false)
         references += ref
         scope.launch {
-            val built = attempt { buildExtraContext(uriString, name) }
+            val file = attempt { workingCopy(Uri.parse(uriString)) }
+            if (file == null) {
+                ref.loading = false
+                ref.failed = true
+                return@launch
+            }
+            ref.size = file.length()
+            // Kembaran yang GAGAL dibaca tidak menghalangi percobaan baru lewat alamat lain.
+            references.firstOrNull { it !== ref && !it.isImage && it.failed && it.name == name && it.size > 0 && it.size == ref.size }
+                ?.let { references.remove(it) }
+            // Dokumen yang sedang terbuka tidak dijadikan pedoman untuk dirinya sendiri,
+            // dan pedoman yang sama (nama + ukuran) tidak didaftarkan dua kali.
+            if (isAttachedFile(file, name) ||
+                references.any { it !== ref && !it.isImage && it.name == name && it.size > 0 && it.size == ref.size }
+            ) {
+                references.remove(ref)
+                return@launch
+            }
+            val built = attempt { buildExtraContext(file, name) }
             ref.loading = false
             if (built == null) {
                 ref.failed = true
@@ -457,6 +574,7 @@ class AiSession(
         }
         val ref = AiReference(name, Uri.fromFile(file).toString(), isImage = true)
         ref.imageFile = file
+        ref.size = file.length()
         references += ref
     }
 
@@ -746,6 +864,10 @@ class AiSession(
         val baseText = if (append) entry.text else ""
         val baseReasoning = if (append) entry.reasoning else ""
         running = true
+        phase = AiPhase.Connecting
+        phaseProvider = null
+        phaseAttempt = 0
+        turnStartedAt = System.currentTimeMillis()
         job = scope.launch {
             var lastError: AiException? = null
             var emittedNew = false
@@ -765,7 +887,15 @@ class AiSession(
                     entry.failed = true
                     entry.error = text(R.string.ai_error_no_key)
                 }
-                for (provider in chain) {
+                for ((candidateIndex, provider) in chain.withIndex()) {
+                    // Label aktivitas mengikuti rantai: kandidat pertama menunggu jawaban,
+                    // kandidat berikutnya berarti rantai berpindah provider.
+                    if (candidateIndex == 0) {
+                        if (phase != AiPhase.Retrying) phase = AiPhase.Waiting
+                    } else {
+                        phase = AiPhase.Switching
+                        phaseProvider = provider.name
+                    }
                     val keys = if (provider.keyOptional && !store.hasKey(provider.id)) listOf<String?>(null)
                     else store.keys(provider.id).ifEmpty { listOf<String?>(null) }
                     for (key in keys) {
@@ -789,13 +919,19 @@ class AiSession(
                                 onReasoning = { piece ->
                                     synchronized(bufLock) {
                                         reasoningBuf.append(piece)
+                                        if (contentBuf.isEmpty()) phase = AiPhase.Reasoning
                                         val now = System.nanoTime()
                                         if (now - lastFlush > 80_000_000L) { lastFlush = now; flush() }
                                     }
                                 },
+                                onRetry = { next ->
+                                    phase = AiPhase.Retrying
+                                    phaseAttempt = next
+                                },
                             ) { piece ->
                                 synchronized(bufLock) {
                                     contentBuf.append(piece)
+                                    phase = AiPhase.Answering
                                     val now = System.nanoTime()
                                     if (now - lastFlush > 80_000_000L) { lastFlush = now; flush() }
                                 }
@@ -849,12 +985,15 @@ class AiSession(
                 } else if (succeeded) {
                     maybeGenerateSummary()
                     maybeGenerateUnderstanding()
+                    maybeGenerateTopic(sentHistory)
                     generateFollowUps(sentHistory)
                 }
             } catch (e: CancellationException) {
                 entry.stopped = true
             } finally {
                 running = false
+                phase = AiPhase.Idle
+                turnStartedAt = 0L
                 persist()
                 if (flushWanted && queue.isNotEmpty()) flushQueue()
                 else if (queue.isEmpty()) flushWanted = false
@@ -912,6 +1051,48 @@ class AiSession(
             if (lines.isEmpty() || running || history !== sentHistory) return@launch
             followUps.clear()
             followUps.addAll(lines)
+        }
+    }
+
+    // ---- Topik bahasan berjalan per ruangan ------------------------------------------------------
+
+    /**
+     * Memperbarui satu baris topik bahasan ruangan ini dari isi percakapannya, memakai provider
+     * yang benar benar menjawab (pola yang sama seperti chip pertanyaan lanjutan: isi ruangan
+     * ini memang sudah terkirim ke provider itu oleh pengguna sendiri, jadi tidak ada
+     * pengiriman diam diam ke pihak baru). Dibuat saat jawaban pertama selesai, lalu dibuat
+     * ulang tiap tiga jawaban berikutnya. Hasilnya disimpan di metadata obrolan.
+     */
+    private fun maybeGenerateTopic(sentHistory: JSONArray) {
+        val meta = currentMeta() ?: return
+        val answers = entries.count { it.role == "assistant" && it.text.isNotBlank() && !it.failed }
+        if (answers == 0) return
+        if (meta.topic != null && answers - meta.topicAt < 3) return
+        val provider = store.providers.firstOrNull { it.id == historyOwnerId } ?: store.active ?: return
+        if (topicJob?.isActive == true) return
+        val chatId = meta.id
+        topicJob = scope.launch {
+            val lastTurns = JSONArray()
+            val from = maxOf(1, sentHistory.length() - 6)
+            for (i in from until sentHistory.length()) {
+                val o = sentHistory.optJSONObject(i) ?: continue
+                lastTurns.put(JSONObject().put("role", o.optString("role")).put("content", o.optString("content").take(1200)))
+            }
+            lastTurns.put(
+                JSONObject().put("role", "user").put(
+                    "content",
+                    "Tulis SATU baris singkat, maksimal 12 kata, dalam Bahasa Indonesia: topik yang sedang dibahas dalam percakapan di atas. Tanpa tanda kutip, tanpa kata pembuka, tanpa titik di akhir.",
+                ),
+            )
+            val reply = runCatching { client.complete(provider, store.key(provider.id), lastTurns, 0.3) }.getOrNull() ?: return@launch
+            val line = reply.optString("content").trim().lines().firstOrNull()?.trim()?.trim('"', '.', ' ')?.take(120).orEmpty()
+            if (line.isBlank() || history !== sentHistory) return@launch
+            val target = chats.firstOrNull { it.id == chatId } ?: return@launch
+            target.topic = line
+            target.topicAt = answers
+            val at = chats.indexOfFirst { it.id == chatId }
+            if (at >= 0) chats[at] = target.copy(topic = line, topicAt = answers)
+            persistIndex()
         }
     }
 
@@ -1088,6 +1269,8 @@ class AiSession(
                     pinned = o.optBoolean("pinned"),
                     updatedAt = o.optLong("updated"),
                     style = o.optString("style", "seimbang"),
+                    topic = o.optString("topic").takeIf { it.isNotBlank() },
+                    topicAt = o.optInt("topicAt"),
                 )
             }
         }
@@ -1105,6 +1288,7 @@ class AiSession(
                         put("id", m.id); put("title", m.title)
                         put("doc", m.docPath ?: ""); put("docName", m.docName ?: "")
                         put("pinned", m.pinned); put("updated", m.updatedAt); put("style", m.style)
+                        put("topic", m.topic ?: ""); put("topicAt", m.topicAt)
                     })
                 }
                 val target = indexFile()
@@ -1204,10 +1388,17 @@ class AiSession(
         // tanpa ini hasil mereka bisa menulis ulang berkas yang baru saja dihapus.
         summaryJob?.cancel()
         guideJob?.cancel()
+        topicJob?.cancel()
         attachSeq++
         preparing = false
+        phase = AiPhase.Idle
+        readProgress = null
+        turnStartedAt = 0L
         attachedDocId = null
         attachedDocPath = null
+        attachedName = null
+        attachedSize = -1L
+        attachedFile = null
         docContextText = null
         combinedContext = null
         context = AiContext.None

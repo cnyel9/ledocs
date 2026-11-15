@@ -1659,4 +1659,16 @@
     <string name="ai_ref_no_vision">Model aktif sudah teruji dan tidak mendukung gambar, jadi gambar tidak dilampirkan. Ganti model yang mendukung gambar, atau jalankan Uji Kemampuan di Pengaturan, Asisten AI.</string>
     <string name="ai_guide_title">Yang saya pahami dari pedoman</string>
     <string name="ai_guide_hint">Koreksi lewat pesan bila ada yang meleset.</string>
+    <string name="ai_status_connecting">Menghubungi model</string>
+    <string name="ai_status_waiting">Menunggu jawaban</string>
+    <string name="ai_status_waiting_long">Masih menunggu jawaban</string>
+    <string name="ai_status_waiting_long_doc">Masih menunggu, dokumen besar memang lebih lama</string>
+    <string name="ai_status_answering">Menulis jawaban</string>
+    <string name="ai_status_retrying">Koneksi tersendat, mencoba lagi ke-%1$d dari %2$d</string>
+    <string name="ai_status_switching">Beralih ke %1$s</string>
+    <string name="ai_status_reading_page">Membaca halaman %1$d dari %2$d</string>
+    <string name="ai_room_free">Obrolan bebas</string>
+    <string name="ai_room_extras">Konteks tambahan: %1$s</string>
+    <string name="ai_room_refs">Pedoman: %1$s</string>
+    <string name="ai_room_topic">Bahasan: %1$s</string>
 </resources>

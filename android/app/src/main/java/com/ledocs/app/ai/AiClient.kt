@@ -44,6 +44,7 @@ class AiClient {
         messages: JSONArray,
         temperature: Double = 0.7,
         onReasoning: (String) -> Unit = {},
+        onRetry: (attempt: Int) -> Unit = {},
         onDelta: (String) -> Unit,
     ): JSONObject = withContext(Dispatchers.IO) {
         val body = JSONObject().apply {
@@ -67,6 +68,8 @@ class AiClient {
                 lastError = e
                 val retryable = !emitted && (e.kind == AiException.Kind.QUOTA || e.kind == AiException.Kind.SERVER || e.kind == AiException.Kind.NETWORK)
                 if (!retryable || attempt >= MAX_ATTEMPTS) throw e
+                // Kabari lapisan sesi SEBELUM menunggu: pengulangan tidak boleh diam di layar.
+                onRetry(attempt + 1)
                 val waitMs = e.retryAfterSec?.let { minOf(it * 1000, 15_000L) } ?: minOf(1000L shl (attempt - 1), 8000L)
                 delay(waitMs)
             }
