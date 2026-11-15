@@ -1,12 +1,30 @@
+<div align="center">
+
 # LeDocs
 
-### Pembaca dan penyunting PDF serta dokumen Office untuk Android. Gratis, tanpa iklan, tanpa akun. Offline secara bawaan, online hanya atas perintah Anda.
+<img src="docs/icon.png" width="200" alt="Ikon LeDocs" />
+
+<br/>
+
+**Pembaca dan penyunting PDF serta dokumen Office untuk Android. Gratis, tanpa iklan, tanpa akun. Offline secara bawaan, online hanya atas perintah Anda.**
+
+[![Versi](https://img.shields.io/github/v/release/cnyel9/ledocs?style=flat-square&logo=android&logoColor=white&label=Versi&color=000000)](https://github.com/cnyel9/ledocs/releases/latest)
+[![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com/cnyel9/ledocs/releases/latest)
+[![Lisensi: MIT/Apache-2.0](https://img.shields.io/badge/Lisensi-MIT%2FApache--2.0-blue.svg?style=flat-square)](LICENSE-APACHE)
+
+<br/>
+
+[**Unduh APK Terbaru**](https://github.com/cnyel9/ledocs/releases/latest)
+
+</div>
+
+---
 
 Baca, tanda tangani, dan sunting PDF, buka dan sunting berkas Word dan Excel, tampilkan PowerPoint, serta simpan catatan, daftar tugas, foto, dan memo suara dalam satu tempat. Semua fitur dokumen berjalan sepenuhnya di perangkat Anda, tanpa pelacak dan tanpa sistem akun. Dokumen Anda tidak pernah meninggalkan perangkat Anda, kecuali teks yang Anda sendiri kirimkan ke Asisten AI bila Anda menyalakan fitur opsional itu.
 
 Antarmuka LeDocs sepenuhnya berbahasa Indonesia dengan latar gelap hitam.
 
-## Yang bisa dilakukan
+## Fitur
 
 ### Baca dan olah PDF
 
@@ -22,23 +40,27 @@ Antarmuka LeDocs sepenuhnya berbahasa Indonesia dengan latar gelap hitam.
 - **Excel** (.xlsx, .xls, .xlsb, .ods, .csv): kisi yang bisa digeser dengan panel beku dan tab lembar, nilai dan rumus yang menghitung ulang, format sel, sisip baris dan kolom, cari, dan urungkan. Simpan sebagai Excel atau CSV, atau ekspor ke PDF.
 - **PowerPoint** (.pptx, dan teks dari .ppt): slide sebagai halaman, mode presentasi layar penuh, pencarian, bacakan, dan ekspor ke PDF.
 
+### Asisten AI (opsional, mati secara bawaan)
+
+- Tanya jawab dokumen dengan kutipan halaman, dari dalam dokumen maupun dari layar obrolan.
+- Provider pilihan Anda sendiri: 10 preset (termasuk yang gratis dengan key sendiri) atau provider kustom, tanpa server perantara.
+- Simpan jawaban menjadi PDF atau Word langsung ke folder Download/LeDocs.
+
 ### Catatan, daftar, foto, dan suara
 
 - Catatan cepat dengan format ringan, daftar tugas dan belanja, memo suara dengan gelombang bunyi, dan catatan foto.
 - Penyunting gambar dengan paparan, kontras, sorotan, bayangan, kecerahan warna, kejenuhan, dan putar.
 - Pratinjau Cepat: buka berkas dari WhatsApp, Gmail, atau pengelola berkas dan berkas itu melayang di atas aplikasi tersebut sebagai kartu kaca, seperti Quick Look di Android.
 
-## Versi Android yang didukung
-
-Android 10 (API 29) atau yang lebih baru.
+---
 
 ## Unduh
 
-APK rilis diterbitkan di halaman [Releases](https://github.com/cnyel9/ledocs/releases). Pilih APK yang sesuai dengan perangkat Anda:
+[**Unduh APK Terbaru (v0.0.1)**](https://github.com/cnyel9/ledocs/releases/latest)
 
-| APK | Untuk |
-| --- | --- |
-| `LeDocs-v<versi>.apk` (arm64-v8a) | Sebagian besar ponsel dan tablet ARM 64-bit saat ini |
+> **Versi 0.0.1** · Android 10 (API 29) atau yang lebih baru · Satu APK arm64-v8a (`LeDocs-v0.0.1.apk`) untuk sebagian besar ponsel dan tablet ARM 64-bit saat ini.
+
+---
 
 ## Teknologi
 
