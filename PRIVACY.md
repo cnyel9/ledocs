@@ -14,14 +14,14 @@ Tidak ada. LeDocs tidak memiliki sistem akun, iklan, analitik, maupun pelaporan 
 
 Setiap dokumen (PDF, Word, Excel, PowerPoint), catatan, daftar, memo suara, dan foto dibuka, disunting, dan disimpan di perangkat Anda oleh mesin LeDocs sendiri. Pengenalan teks (OCR) berjalan di perangkat Anda dengan model yang disertakan di dalam aplikasi. Semua fitur dokumen bekerja sepenuhnya tanpa internet, termasuk dalam mode pesawat.
 
-Satu satunya pemakai jaringan adalah **Asisten AI**, fitur opsional yang **mati secara bawaan** dan hanya bekerja setelah Anda menyalakannya di Pengaturan:
+Hanya ada dua pemakai jaringan, keduanya di bawah kendali Anda. Pertama adalah **Asisten AI**, fitur opsional yang **mati secara bawaan** dan hanya bekerja setelah Anda menyalakannya di Pengaturan:
 
 - Bila Anda bertanya kepada Asisten AI, teks pertanyaan Anda dan, bila Anda melampirkan dokumen yang sedang terbuka, teks hasil ekstraksi dokumen itu dikirim **langsung dari perangkat Anda ke provider yang Anda pilih** (host yang tertulis di pengaturan provider, misalnya openrouter.ai, api.deepseek.com, atau server Anda sendiri). Tidak ada server perantara milik pengembang.
 - API key Anda tersimpan terenkripsi di perangkat dengan Android Keystore, hanya dikirim ke provider pemiliknya, tidak pernah ke pengembang, dan tidak pernah ditulis ke log.
 - Sebelum pengiriman pertama yang melampirkan dokumen ke sebuah provider, aplikasi menampilkan tujuan dan isi yang akan dikirim, dan meminta persetujuan Anda. Menyalakan Asisten AI tidak mengirim apa pun dengan sendirinya.
 - Mematikan Asisten AI menghentikan seluruh lalu lintas fitur ini. Riwayat obrolan tersimpan hanya di perangkat Anda.
 
-Di luar Asisten AI, aplikasi tidak melakukan panggilan jaringan apa pun: tidak ada pemeriksaan latar belakang, sinkronisasi, atau telemetri.
+Kedua adalah **pemeriksa pembaruan**: saat aplikasi dibuka, LeDocs menanyakan rilis terakhir ke GitHub (api.github.com) untuk melihat apakah ada versi yang lebih baru, dan mengunduh APK rilis hanya setelah Anda mengetuk Unduh & Pasang. Pemeriksaan itu tidak mengirim data pribadi atau dokumen apa pun, dan APK yang diunduh diverifikasi ukuran, hash SHA-256, dan sertifikat penandatangannya sebelum dipasang. Di luar dua hal ini, aplikasi tidak melakukan panggilan jaringan apa pun: tidak ada sinkronisasi atau telemetri.
 
 ## Berkas dan izin
 

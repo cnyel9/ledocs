@@ -95,7 +95,7 @@ Struktur proyek: `android/` aplikasi, `engine/` mesin Rust, `fastlane/` teks eta
 
 ## Privasi
 
-Izin `INTERNET` hanya dipakai Asisten AI, fitur opsional yang mati secara bawaan: pertanyaan dan teks dokumen yang Anda lampirkan dikirim langsung dari perangkat Anda ke provider pilihan Anda, tidak pernah lewat server pengembang. Di luar fitur itu aplikasi tidak melakukan panggilan jaringan apa pun. LeDocs juga tidak menyatakan izin penyimpanan atau kamera: berkas datang lewat pemilih sistem dan aplikasi kamera sistem. Lihat `PRIVACY.md`.
+Izin `INTERNET` hanya dipakai Asisten AI dan pemeriksa pembaruan. Asisten AI adalah fitur opsional yang mati secara bawaan: pertanyaan dan teks dokumen yang Anda lampirkan dikirim langsung dari perangkat Anda ke provider pilihan Anda, tidak pernah lewat server pengembang. Pemeriksa pembaruan menanyakan rilis terakhir ke GitHub saat aplikasi dibuka dan mengunduh APK rilis hanya atas ketukan Anda, tanpa mengirim data pribadi atau dokumen. Di luar dua hal itu aplikasi tidak melakukan panggilan jaringan apa pun. LeDocs juga tidak menyatakan izin penyimpanan atau kamera: berkas datang lewat pemilih sistem dan aplikasi kamera sistem. Lihat `PRIVACY.md`.
 
 ## Lisensi
 

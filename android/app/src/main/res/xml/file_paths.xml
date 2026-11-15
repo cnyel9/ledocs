@@ -4,6 +4,7 @@
      takes for a note (written straight into the notes' media folder) -->
 <paths>
     <cache-path name="share" path="share/" />
+    <cache-path name="updates" path="updates/" />
     <cache-path name="camera" path="camera/" />
     <files-path name="notes" path="notes/media/" />
 </paths>

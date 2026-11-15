@@ -197,6 +197,7 @@ private fun SettingsRoot(vm: AppViewModel, openLicences: () -> Unit, openGlass: 
                 SettingRow(LucideIcons.Compass, Candy.Sky, stringResource(R.string.settings_show_welcome), { vm.showWelcomeAgain() }, first = true)
                 SettingRow(LucideIcons.MessageSquare, Candy.Tomato, stringResource(R.string.home_report_problem), { leaving = "$LEDOCS_REPO/issues" }, chevron = true)
                 SettingRow(LucideIcons.CodeXml, Candy.Grape, stringResource(R.string.home_source_code), { uri.openUri(LEDOCS_REPO) }, chevron = true)
+                SettingRow(LucideIcons.FileDown, Candy.Sky, stringResource(R.string.update_check_row), { vm.updates.checkManual() }, value = vm.appVersion)
                 SettingRow(LucideIcons.ScrollText, Candy.Mint, stringResource(R.string.licences_row), openLicences, chevron = true)
             }
         }

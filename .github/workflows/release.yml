@@ -110,6 +110,8 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/dist"
           gradle assembleRelease "-Pledocs.abis=arm64-v8a" "-Pledocs.version=$VERSION" --no-daemon --no-configuration-cache
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/LeDocs-v$VERSION.apk"
+          # Aset pendamping untuk pemeriksa pembaruan di dalam aplikasi: hash SHA-256 APK.
+          (cd "$GITHUB_WORKSPACE/dist" && sha256sum "LeDocs-v$VERSION.apk" >"LeDocs-v$VERSION.apk.sha256")
 
       - name: APK
         run: |

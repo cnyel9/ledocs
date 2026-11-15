@@ -146,6 +146,8 @@ private fun Shell(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: 
             delay(220)
         }
     }
+    // pemeriksa pembaruan: cek otomatis terbatas (paling sering 12 jam sekali, gagal diam)
+    LaunchedEffect(Unit) { vm.updates.checkAuto() }
     // outside a document the bar icons follow the app's theme (the viewer sets its own)
     val view = LocalView.current
     val activity = LocalContext.current as? android.app.Activity
@@ -257,6 +259,7 @@ private fun Shell(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: 
         },
     )
 
+    com.ledocs.app.update.UpdateDialog(vm.updates)
     if (doc == null) vm.fileSheet?.let { (r, recent) -> FileActionsSheet(vm, r, recent) { vm.fileSheet = null } }
     // the loader only for an open that takes a while: a quick one shouldn't flash a spinner first
     var slowOpen by remember { mutableStateOf(false) }

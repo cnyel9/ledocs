@@ -1671,4 +1671,17 @@
     <string name="ai_room_extras">Konteks tambahan: %1$s</string>
     <string name="ai_room_refs">Pedoman: %1$s</string>
     <string name="ai_room_topic">Bahasan: %1$s</string>
+    <string name="update_check_row">Periksa Pembaruan</string>
+    <string name="update_available_title">Pembaruan Tersedia</string>
+    <string name="update_version_line">LeDocs %1$s · %2$s</string>
+    <string name="update_download_install">Unduh &amp; Pasang</string>
+    <string name="update_install">Pasang</string>
+    <string name="update_later">Nanti</string>
+    <string name="update_downloading">Mengunduh… %1$d%%</string>
+    <string name="update_notes_empty">Tidak ada catatan rilis.</string>
+    <string name="update_uptodate">LeDocs sudah versi terbaru</string>
+    <string name="update_check_failed">Tidak dapat memeriksa pembaruan. Coba lagi nanti.</string>
+    <string name="update_download_failed">Unduhan atau verifikasi gagal. Coba lagi.</string>
+    <string name="update_allow_installs">Izinkan pemasangan dari LeDocs, lalu ketuk Pasang lagi.</string>
+    <string name="update_installer_failed">Pemasang tidak dapat dibuka. Coba lagi.</string>
 </resources>

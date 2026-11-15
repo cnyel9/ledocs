@@ -2661,6 +2661,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         publishDownload = { file, mime -> publishToDownloads(file, mime) },
     )
 
+    // Pemeriksa pembaruan (GitHub Releases); kabar cek manual lewat tell.
+    val updates = com.ledocs.app.update.UpdateState(viewModelScope, application) { res ->
+        tell(application.getString(res))
+    }
+
     // Menyalin berkas hasil AI ke folder publik Download/LeDocs lewat
     // MediaStore (tanpa izin penyimpanan; Android 10+). Mengembalikan URI
     // konten berkasnya, atau null bila gagal (entri setengah jadi dihapus).
