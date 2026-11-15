@@ -499,7 +499,12 @@ fun AiScreen(vm: AppViewModel) {
                                     onRetry = { withConsent { session.retry(entry) } },
                                     onContinue = { withConsent { session.continueAnswer(entry) } },
                                     onSave = { saveTarget = entry },
-                                    onOpenSaved = { path -> vm.open(Uri.fromFile(File(path))) },
+                                    onOpenSaved = { path ->
+                                        vm.open(
+                                            if (path.startsWith("content://")) Uri.parse(path)
+                                            else Uri.fromFile(File(path)),
+                                        )
+                                    },
                                 )
                             }
                             if (session.followUps.isNotEmpty() && !session.running) {

@@ -2655,7 +2655,41 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Asisten AI (opsional): saklar, provider, dan key terenkripsi; layarnya terbuka di atas segalanya. */
     val aiStore = com.ledocs.app.ai.AiStore(app)
-    val aiSession = com.ledocs.app.ai.AiSession(aiStore, viewModelScope, { engine }, app.filesDir) { uri -> files.workingCopy(uri) }
+    val aiSession = com.ledocs.app.ai.AiSession(
+        aiStore, viewModelScope, { engine }, app.filesDir,
+        workingCopy = { uri -> files.workingCopy(uri) },
+        publishDownload = { file, mime -> publishToDownloads(file, mime) },
+    )
+
+    // Menyalin berkas hasil AI ke folder publik Download/LeDocs lewat
+    // MediaStore (tanpa izin penyimpanan; Android 10+). Mengembalikan URI
+    // konten berkasnya, atau null bila gagal (entri setengah jadi dihapus).
+    private fun publishToDownloads(file: File, mime: String): String? {
+        val resolver = application.contentResolver
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, file.name)
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, mime)
+            put(
+                android.provider.MediaStore.Downloads.RELATIVE_PATH,
+                android.os.Environment.DIRECTORY_DOWNLOADS + "/LeDocs",
+            )
+            put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: return null
+        return try {
+            val out = resolver.openOutputStream(uri) ?: throw java.io.IOException("openOutputStream null")
+            out.use { o -> file.inputStream().use { it.copyTo(o) } }
+            val done = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+            }
+            resolver.update(uri, done, null, null)
+            uri.toString()
+        } catch (e: Exception) {
+            runCatching { resolver.delete(uri, null, null) }
+            null
+        }
+    }
     var aiOpen by mutableStateOf(false)
 
     /** The file whose "..." sheet is open, and whether it was opened from Recent. */

@@ -126,6 +126,10 @@ class AiSession(
     private val engineProvider: () -> Engine?,
     private val filesDir: File,
     private val workingCopy: (Uri) -> File,
+    // Menerbitkan berkas hasil ke folder Download/LeDocs publik; mengembalikan
+    // URI kontennya, atau null bila penerbitan gagal (pemanggil jatuh kembali
+    // ke berkas internal).
+    private val publishDownload: (File, String) -> String?,
 ) {
     val entries = mutableStateListOf<AiEntry>()
     val chats = mutableStateListOf<AiChatMeta>()
@@ -1203,8 +1207,21 @@ class AiSession(
                 }
                 runCatching { eng.tool("doc_close", mapOf("doc" to id, "discard_changes" to true)) }
                 if (result.exists()) {
-                    entry.savedName = result.name
-                    entry.savedPath = result.absolutePath
+                    val mime = if (result.extension.equals("docx", true))
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    else "application/pdf"
+                    val published = runCatching { publishDownload(result, mime) }.getOrNull()
+                    if (published != null) {
+                        entry.savedName = result.name
+                        entry.savedPath = published
+                        // Berkas internal hanya perantara; salinan resminya
+                        // ada di Download/LeDocs.
+                        runCatching { pdfFile.delete() }
+                        if (result != pdfFile) runCatching { result.delete() }
+                    } else {
+                        entry.savedName = result.name
+                        entry.savedPath = result.absolutePath
+                    }
                 } else {
                     // Jangan diam saja: pengguna harus tahu simpanannya tidak jadi.
                     entry.saveFailed = true
