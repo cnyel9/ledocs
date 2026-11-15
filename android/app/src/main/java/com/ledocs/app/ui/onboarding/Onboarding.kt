@@ -427,7 +427,7 @@ private fun PdfTools(sway: () -> Float) {
                 repeat(7) { k -> Box(Modifier.fillMaxWidth(if (k % 3 == 2) 0.7f else 1f).height(6.dp).clip(Capsule).background(Color(0xFF17141F).copy(alpha = 0.12f))) }
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.fillMaxWidth(0.75f).height(36.dp).clip(RoundedRectangle(8.dp)).background(Candy.Chip.copy(alpha = 0.6f)).border(1.dp, Candy.Lemon, RoundedRectangle(8.dp))) {
-                    Text("A. Prasetyo", style = ClearType.Title.copy(fontSize = 18.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = Candy.InkBlue, modifier = Modifier.align(Alignment.Center))
+                    Text("Levi S", style = ClearType.Title.copy(fontSize = 18.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = Candy.InkBlue, modifier = Modifier.align(Alignment.Center))
                 }
             }
             ToolBubble(LucideIcons.Signature, Candy.Grape, Modifier.align(Alignment.TopStart).padding(start = 34.dp, top = 30.dp).flyIn(-8f, Offset(-160f, 0f), 200, sway))

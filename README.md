@@ -56,9 +56,9 @@ Antarmuka LeDocs sepenuhnya berbahasa Indonesia dengan latar gelap hitam.
 
 ## Unduh
 
-[**Unduh APK Terbaru (v0.0.1)**](https://github.com/cnyel9/ledocs/releases/latest)
+[**Unduh APK Terbaru (v0.0.2)**](https://github.com/cnyel9/ledocs/releases/latest)
 
-> **Versi 0.0.1** · Android 10 (API 29) atau yang lebih baru · Satu APK arm64-v8a (`LeDocs-v0.0.1.apk`) untuk sebagian besar ponsel dan tablet ARM 64-bit saat ini.
+> **Versi 0.0.2** · Android 10 (API 29) atau yang lebih baru · Satu APK arm64-v8a (`LeDocs-v0.0.2.apk`) untuk sebagian besar ponsel dan tablet ARM 64-bit saat ini.
 
 ---
 
