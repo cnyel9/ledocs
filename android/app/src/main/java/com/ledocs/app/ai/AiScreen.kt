@@ -12,9 +12,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,6 +60,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.ledocs.app.R
+import com.ledocs.app.engine.DocumentTypes
 import com.ledocs.app.ui.AppViewModel
 import com.ledocs.app.ui.LucideIcons
 import com.ledocs.app.ui.desk.ScreenHeader
@@ -64,17 +69,26 @@ import com.ledocs.app.ui.glass.GlassCircle
 import com.ledocs.app.ui.glass.GlassDialog
 import com.ledocs.app.ui.glass.GlassIcon
 import com.ledocs.app.ui.glass.GlassPill
+import com.ledocs.app.ui.glass.GlassTab
+import com.ledocs.app.ui.glass.GlassTabs
 import com.ledocs.app.ui.glass.GlassTextField
 import com.ledocs.app.ui.glass.RoundedRectangle
+import com.ledocs.app.ui.glass.WashPanel
 import com.ledocs.app.ui.glass.glass
 import com.ledocs.app.ui.glass.pressable
 import com.ledocs.app.ui.glass.wash
+import com.ledocs.app.ui.home.FileRow
+import com.ledocs.app.ui.home.dayBucket
+import com.ledocs.app.ui.home.displayName
+import com.ledocs.app.ui.home.whenLabel
 import com.ledocs.app.ui.theme.Candy
 import com.ledocs.app.ui.theme.ClearType
 import com.ledocs.app.ui.theme.clear
+import com.ledocs.app.ui.viewer.formatSize
 import java.io.File
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -101,8 +115,10 @@ fun AiScreen(vm: AppViewModel) {
     val session = vm.aiSession
     val doc = vm.document
     var page by remember { mutableStateOf("chat") }
+    var pickerMode by remember { mutableStateOf("context") }
     BackHandler(enabled = page == "chat") { vm.aiOpen = false }
     BackHandler(enabled = page == "history") { page = "chat" }
+    BackHandler(enabled = page == "pick") { page = "chat" }
     LaunchedEffect(doc?.id) {
         if (doc != null) session.attach(doc)
         else if (session.attachedDocId != null) session.detach()
@@ -124,8 +140,40 @@ fun AiScreen(vm: AppViewModel) {
     var picker by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var saveTarget by remember { mutableStateOf<AiEntry?>(null) }
-    var extraSheet by remember { mutableStateOf(false) }
+    var refSheet by remember { mutableStateOf(false) }
+    var noVisionWarn by remember { mutableStateOf(false) }
     var addingCommand by remember { mutableStateOf(false) }
+    val uiScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // Pemilih gambar referensi: salin ke folder refs sesi, lalu daftarkan sebagai pedoman gambar.
+    val imagePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(4),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        uiScope.launch {
+            for (uri in uris) {
+                val copied = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val dir = File(context.filesDir, "ai_refs").apply { mkdirs() }
+                        val name = runCatching {
+                            context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cur ->
+                                if (cur.moveToFirst()) cur.getString(0) else null
+                            }
+                        }.getOrNull() ?: (uri.lastPathSegment?.substringAfterLast('/') ?: "gambar")
+                        val target = File(dir, System.currentTimeMillis().toString(36) + "-" + name.replace(Regex("[^A-Za-z0-9._-]"), "_"))
+                        try {
+                            context.contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { input.copyTo(it) } }
+                        } catch (e: Exception) {
+                            target.delete()
+                            throw e
+                        }
+                        if (target.exists() && target.length() > 0) target to name else { target.delete(); null }
+                    }.getOrNull()
+                }
+                if (copied != null) session.addReferenceImageFile(copied.first, copied.second)
+            }
+        }
+    }
     val provider = store.active
     // Provider lokal (server di perangkat sendiri) tidak butuh internet sama sekali.
     val reachable = online || (provider != null && AiClient.isLoopback(provider.baseUrl))
@@ -136,7 +184,9 @@ fun AiScreen(vm: AppViewModel) {
     /** Gerbang persetujuan: kiriman pertama yang membawa teks dokumen ke provider ini wajib izin. */
     fun withConsent(action: () -> Unit) {
         val p = provider ?: return
-        val docAttached = session.context is AiContext.Attached || session.preparing || session.extraDocs.any { it.text != null }
+        val docAttached = session.context is AiContext.Attached || session.preparing ||
+            session.extraDocs.any { it.text != null || it.loading } ||
+            session.references.any { it.text != null || it.isImage || it.loading }
         if (docAttached && !AiClient.isLoopback(p.baseUrl) && !store.consented(p.id, hostOf(p), session.attachedDocPath)) {
             pendingAction = action
         } else {
@@ -170,17 +220,35 @@ fun AiScreen(vm: AppViewModel) {
         AiAuroraBackground(Modifier.fillMaxSize())
         if (page == "history") {
             AiHistoryPage(vm, onBack = { page = "chat" })
+        } else if (page == "pick") {
+            AiPickerPage(
+                vm = vm,
+                forReference = pickerMode == "reference",
+                excludeKeys = buildSet {
+                    session.attachedDocPath?.let { add(it) }
+                    if (pickerMode == "reference") session.references.forEach { add(it.uriString) }
+                    else session.extraDocs.forEach { add(it.uriString) }
+                },
+                onBack = { page = "chat" },
+                onConfirm = { rows ->
+                    rows.forEach { row ->
+                        if (pickerMode == "reference") session.addReferenceDoc(row.key, row.name)
+                        else session.addExtraDoc(row.key, row.name)
+                    }
+                    page = "chat"
+                },
+            )
         } else {
             Column(Modifier.fillMaxSize()) {
                 Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                 Spacer(Modifier.height(14.dp))
                 ScreenHeader(null, stringResource(R.string.ai_title), onBack = { vm.aiOpen = false }) {
-                    GlassPill(onClick = { page = "history" }, height = 40.dp, horizontalPadding = 14.dp, label = stringResource(R.string.ai_history)) {
-                        Text(stringResource(R.string.ai_history), style = ClearType.CaptionStrong, color = c.ink)
+                    GlassCircle(onClick = { page = "history" }, size = 40.dp, label = stringResource(R.string.ai_history)) {
+                        GlassIcon(LucideIcons.RotateCcw, null, Modifier.size(19.dp))
                     }
                     Spacer(Modifier.width(8.dp))
-                    GlassPill(onClick = { session.newChat() }, height = 40.dp, horizontalPadding = 14.dp, label = stringResource(R.string.ai_new_chat)) {
-                        Text(stringResource(R.string.ai_new), style = ClearType.CaptionStrong, color = c.ink)
+                    GlassCircle(onClick = { session.newChat() }, size = 40.dp, label = stringResource(R.string.ai_new_chat)) {
+                        GlassIcon(LucideIcons.MessageSquarePlus, null, Modifier.size(19.dp))
                     }
                 }
                 // pil provider: teks saja, nama dan model aktif, ketuk untuk mengganti
@@ -235,8 +303,30 @@ fun AiScreen(vm: AppViewModel) {
                             )
                         }
                     }
-                    GlassPill(onClick = { extraSheet = true }, height = 30.dp, horizontalPadding = 10.dp, label = stringResource(R.string.ai_extra_add)) {
+                    GlassPill(onClick = { pickerMode = "context"; page = "pick" }, height = 30.dp, horizontalPadding = 10.dp, label = stringResource(R.string.ai_extra_add)) {
                         Text("+ " + stringResource(R.string.ai_extra_add), style = ClearType.Caption, color = c.ink)
+                    }
+                }
+                // chip pedoman dan referensi (dari tombol +): peran berbeda dari dokumen konteks,
+                // ini acuan yang diikuti AI, jadi barisnya sendiri dengan label Pedoman/Gambar.
+                if (session.references.isNotEmpty()) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 2.dp).horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        session.references.forEach { ref ->
+                            GlassPill(onClick = { session.removeReference(ref) }, height = 30.dp, horizontalPadding = 10.dp, label = ref.name) {
+                                Text(
+                                    stringResource(if (ref.isImage) R.string.ai_ref_chip_image else R.string.ai_ref_chip_doc) + " · " + ref.name + when {
+                                        ref.loading -> " · " + stringResource(R.string.ai_extra_loading)
+                                        ref.failed -> " · " + stringResource(R.string.ai_extra_failed)
+                                        else -> " · ✕"
+                                    },
+                                    style = ClearType.Caption, color = if (ref.failed) Candy.Tomato else Candy.Lemon,
+                                )
+                            }
+                        }
                     }
                 }
                 // meter konteks
@@ -261,8 +351,9 @@ fun AiScreen(vm: AppViewModel) {
                     snapshotFlow { session.entries.size to (session.entries.lastOrNull()?.text?.length ?: 0) }
                         .collect {
                             if (session.entries.isNotEmpty() && !listState.isScrollInProgress) {
-                                // Kartu ringkasan (bila ada) menempati indeks 0, entri sesudahnya.
-                                val target = session.entries.size - 1 + if (session.summary != null) 1 else 0
+                                // Kartu ringkasan dan kartu pemahaman (bila ada) menempati indeks awal, entri sesudahnya.
+                                val cards = (if (session.summary != null) 1 else 0) + (if (session.referenceUnderstanding != null) 1 else 0)
+                                val target = session.entries.size - 1 + cards
                                 listState.animateScrollToItem(target)
                             }
                         }
@@ -296,6 +387,9 @@ fun AiScreen(vm: AppViewModel) {
                             session.summary?.let { s ->
                                 SummaryCard(s)
                             }
+                            session.referenceUnderstanding?.let { g ->
+                                GuideCard(g)
+                            }
                             Text(
                                 if (doc != null) stringResource(R.string.ai_context_doc) else stringResource(R.string.ai_attach_hint),
                                 style = ClearType.Body, color = c.inkSoft,
@@ -319,6 +413,9 @@ fun AiScreen(vm: AppViewModel) {
                         ) {
                             session.summary?.let { s ->
                                 item(key = "summary") { SummaryCard(s) }
+                            }
+                            session.referenceUnderstanding?.let { g ->
+                                item(key = "guide") { GuideCard(g) }
                             }
                             items(session.entries) { entry ->
                                 EntryRow(
@@ -394,9 +491,15 @@ fun AiScreen(vm: AppViewModel) {
                         Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)
                             .glass(Capsule, c.glass, blur = 3.dp, lensHeight = 14.dp, lensAmount = 26.dp)
                             .drawBehind { drawRect(c.capsule, alpha = 0.9f) }
-                            .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                            .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        // Tombol + di pojok kiri: unggah pedoman atau referensi yang diikuti AI
+                        // (beda peran dari chip Tambah dokumen konteks di atas).
+                        GlassCircle(onClick = { refSheet = true }, size = 40.dp, label = stringResource(R.string.ai_ref_button)) {
+                            GlassIcon(LucideIcons.Plus, null, Modifier.size(20.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
                         BasicTextField(
                             value = input,
                             onValueChange = { input = it },
@@ -478,27 +581,57 @@ fun AiScreen(vm: AppViewModel) {
         }
     }
 
-    if (extraSheet) {
-        // Daftar berkas terakhir dibaca di luar thread utama (akses berkas tersinkron).
-        var recents by remember { mutableStateOf<List<com.ledocs.app.engine.RecentFile>>(emptyList()) }
-        LaunchedEffect(Unit) { recents = withContext(Dispatchers.IO) { vm.recents.list() } }
+    if (refSheet) {
         GlassDialog(
-            onDismiss = { extraSheet = false }, title = stringResource(R.string.ai_extra_title),
+            onDismiss = { refSheet = false }, title = stringResource(R.string.ai_ref_title),
             dismiss = stringResource(R.string.common_cancel),
         ) {
-            val addable = recents.filter { r -> r.uri != session.attachedDocPath && session.extraDocs.none { it.uriString == r.uri } }
-            if (addable.isEmpty()) {
-                Text(stringResource(R.string.ai_history_empty), style = ClearType.Body, color = c.inkSoft)
-            } else {
-                addable.take(20).forEach { r ->
-                    Row(
-                        Modifier.fillMaxWidth().pressable({ session.addExtraDoc(r.uri, r.name); extraSheet = false }).padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(r.name, style = ClearType.BodyStrong, color = c.ink, modifier = Modifier.weight(1f))
-                    }
+            Row(
+                Modifier.fillMaxWidth().pressable({ refSheet = false; pickerMode = "reference"; page = "pick" }).padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                GlassIcon(LucideIcons.FileText, null, Modifier.size(22.dp), tint = Candy.Lemon)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.ai_ref_doc), style = ClearType.BodyStrong, color = c.ink)
+                    Text(stringResource(R.string.ai_ref_doc_body), style = ClearType.Caption, color = c.inkSoft)
                 }
             }
+            Row(
+                Modifier.fillMaxWidth().pressable({
+                    refSheet = false
+                    // Jujur di muka: model yang sudah teruji TANPA kemampuan gambar tidak
+                    // diberi gambar sama sekali; yang belum teruji dibiarkan mencoba.
+                    val p = provider
+                    val caps = if (p != null) store.caps(p.id, p.model) else emptySet()
+                    if (p != null && caps.isNotEmpty() && "gambar" !in caps) {
+                        noVisionWarn = true
+                    } else {
+                        imagePicker.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly,
+                            ),
+                        )
+                    }
+                }).padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                GlassIcon(LucideIcons.Images, null, Modifier.size(22.dp), tint = Candy.Lemon)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.ai_ref_image), style = ClearType.BodyStrong, color = c.ink)
+                    Text(stringResource(R.string.ai_ref_image_body), style = ClearType.Caption, color = c.inkSoft)
+                }
+            }
+        }
+    }
+
+    if (noVisionWarn) {
+        GlassDialog(
+            onDismiss = { noVisionWarn = false }, title = stringResource(R.string.ai_ref_image),
+            dismiss = stringResource(R.string.common_ok),
+        ) {
+            Text(stringResource(R.string.ai_ref_no_vision), style = ClearType.Body, color = c.inkSoft)
         }
     }
 
@@ -558,6 +691,21 @@ private fun capsLabel(caps: Set<String>): String {
     return parts.joinToString(" · ")
 }
 
+/** Kartu pemahaman pedoman: yang AI tangkap dari referensi, untuk dikoreksi pengguna lewat pesan. */
+@Composable
+private fun GuideCard(text: String) {
+    val c = clear
+    Column(
+        Modifier.fillMaxWidth().wash(RoundedRectangle(18.dp), c.capsule).padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(stringResource(R.string.ai_guide_title), style = ClearType.CaptionStrong, color = Candy.Lemon)
+        Spacer(Modifier.height(6.dp))
+        MarkdownText(text)
+        Spacer(Modifier.height(6.dp))
+        Text(stringResource(R.string.ai_guide_hint), style = ClearType.Caption, color = c.inkSoft)
+    }
+}
+
 /** Kartu ringkasan otomatis dokumen yang menempel. */
 @Composable
 private fun SummaryCard(text: String) {
@@ -603,12 +751,16 @@ private fun EntryRow(
     val c = clear
     if (entry.role == "user") {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-            Box(
-                // Gelembung di daftar yang bergeser memakai wash (pola codebase untuk permukaan
-                // yang scroll), bukan backdrop blur asli yang mahal per frame.
-                Modifier.fillMaxWidth(0.85f).wash(Capsule, c.capsule)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            ) { SelectionContainer { Text(entry.text, style = ClearType.Body, color = c.ink) } }
+            // Gelembung mengikuti panjang teksnya (kata pendek jadi gelembung kecil), dibatasi
+            // maksimal 85 persen lebar daftar; bukan fillMaxWidth yang memaksa lebar penuh.
+            BoxWithConstraints {
+                Box(
+                    // Gelembung di daftar yang bergeser memakai wash (pola codebase untuk permukaan
+                    // yang scroll), bukan backdrop blur asli yang mahal per frame.
+                    Modifier.widthIn(max = maxWidth * 0.85f).wash(Capsule, c.capsule)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                ) { SelectionContainer { Text(entry.text, style = ClearType.Body, color = c.ink) } }
+            }
             if (entry.queued) {
                 Spacer(Modifier.height(4.dp))
                 Text(stringResource(R.string.ai_queued), style = ClearType.Caption, color = c.inkSoft)
@@ -815,6 +967,208 @@ private fun AiHistoryPage(vm: AppViewModel, onBack: () -> Unit) {
             dismiss = stringResource(R.string.common_cancel),
         ) {
             Text(stringResource(R.string.ai_delete_chat_body), style = ClearType.Body, color = c.inkSoft)
+        }
+    }
+}
+
+/**
+ * Halaman pemilih berkas penuh bergaya layar Berkas (cari, tab Terakhir/Berbintang/Di
+ * Perangkat, kelompok per hari, panel cuci), dengan pilih sekali banyak. Dipakai dua peran:
+ * dokumen konteks (chip Tambah) dan dokumen pedoman (tombol +). Yang sudah menempel dan
+ * dokumen yang sedang terbuka disembunyikan dari daftar.
+ */
+@Composable
+private fun AiPickerPage(
+    vm: AppViewModel,
+    forReference: Boolean,
+    excludeKeys: Set<String>,
+    onBack: () -> Unit,
+    onConfirm: (List<FileRow>) -> Unit,
+) {
+    val c = clear
+    var tab by remember { mutableStateOf(0) }
+    var query by remember { mutableStateOf("") }
+    val selected = remember { mutableStateMapOf<String, FileRow>() }
+    // Pindai berkas perangkat sekali saat halaman dibuka, supaya tab Di Perangkat dan
+    // pencarian langsung lengkap (pola yang sama seperti layar Berkas saat tabnya dibuka).
+    LaunchedEffect(Unit) { vm.scanLocal() }
+    LaunchedEffect(tab) { if (tab == 2) vm.scanLocal() }
+
+    val rows: List<FileRow> = when {
+        query.isNotBlank() -> vm.searchFiles(query)
+            .sortedWith(compareBy<FileRow> { !it.name.lowercase().startsWith(query.trim().lowercase()) }.thenByDescending { it.date })
+        tab == 0 -> vm.recentRows()
+        tab == 1 -> vm.starredRows()
+        else -> vm.localRows()
+    }.filter { it.key !in excludeKeys }
+
+    val bucketLabels = listOf(
+        stringResource(R.string.files_today), stringResource(R.string.common_yesterday),
+        stringResource(R.string.files_this_week), stringResource(R.string.files_earlier),
+    )
+    val internal = stringResource(R.string.home_internal_storage)
+
+    Column(Modifier.fillMaxSize()) {
+        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        Spacer(Modifier.height(14.dp))
+        ScreenHeader(
+            null,
+            stringResource(if (forReference) R.string.ai_pick_title_ref else R.string.ai_pick_title_context),
+            onBack = onBack,
+        )
+        // kapsul pencarian kaca, bahasa yang sama dengan layar Berkas
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 6.dp)
+                .glass(Capsule, c.glass, blur = 3.dp, lensHeight = 12.dp, lensAmount = 22.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            GlassIcon(LucideIcons.Search, null, Modifier.size(19.dp), tint = c.inkSoft)
+            Spacer(Modifier.width(10.dp))
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.weight(1f),
+                textStyle = ClearType.Body.copy(color = c.ink),
+                cursorBrush = SolidColor(c.ink),
+                singleLine = true,
+                decorationBox = { inner ->
+                    Box {
+                        if (query.isEmpty()) Text(stringResource(R.string.home_search_your_files), style = ClearType.Body, color = c.inkSoft)
+                        inner()
+                    }
+                },
+            )
+            if (query.isNotEmpty()) {
+                Box(Modifier.size(30.dp).pressable({ query = "" }), contentAlignment = Alignment.Center) {
+                    GlassIcon(LucideIcons.CircleX, null, Modifier.size(18.dp), tint = c.inkSoft)
+                }
+            }
+        }
+        if (query.isBlank()) {
+            GlassTabs(
+                tabs = listOf(
+                    GlassTab(stringResource(R.string.home_list_recent), accent = Candy.Tomato),
+                    GlassTab(stringResource(R.string.home_list_starred), accent = Candy.Tangerine),
+                    GlassTab(stringResource(R.string.home_list_on_device), accent = Candy.Sky),
+                ),
+                selected = tab, onSelect = { tab = it },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth(),
+                height = 48.dp,
+            )
+        }
+        if (rows.isEmpty()) {
+            Text(
+                stringResource(R.string.ai_pick_empty),
+                style = ClearType.Body, color = c.inkSoft,
+                modifier = Modifier.padding(horizontal = 30.dp, vertical = 16.dp),
+            )
+            Box(Modifier.weight(1f))
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+            ) {
+                val groups: List<Pair<String?, List<FileRow>>> = when {
+                    query.isNotBlank() -> listOf(null to rows)
+                    tab == 0 -> rows.groupBy { dayBucket(it.date) }.toSortedMap()
+                        .map { (bucket, list) -> bucketLabels[bucket] to list }
+                    tab == 2 -> rows.groupBy { it.location }
+                        .map { (folder, list) -> folder.ifEmpty { internal } to list }
+                    else -> listOf(null to rows)
+                }
+                for ((label, list) in groups) {
+                    if (label != null) {
+                        item(key = "t-" + label) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 18.dp, bottom = 8.dp),
+                                verticalAlignment = Alignment.Bottom,
+                            ) {
+                                Text(label, style = ClearType.Title, color = c.ink, modifier = Modifier.weight(1f))
+                                Text(list.size.toString(), style = ClearType.Number, color = c.inkFaint)
+                            }
+                        }
+                    }
+                    list.chunked(20).forEachIndexed { i, chunk ->
+                        item(key = "p-" + (label ?: "all") + "-" + i) {
+                            WashPanel(Modifier.padding(vertical = 4.dp).fillMaxWidth()) {
+                                Spacer(Modifier.height(4.dp))
+                                chunk.forEach { row ->
+                                    PickerRow(
+                                        row = row,
+                                        ticked = row.key in selected,
+                                        onToggle = {
+                                            if (row.key in selected) selected.remove(row.key) else selected[row.key] = row
+                                        },
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // bar konfirmasi: jumlah pilihan selalu terlihat, tombol mati bila belum ada pilihan
+        Row(
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            GlassPill(
+                onClick = { if (selected.isNotEmpty()) onConfirm(selected.values.toList()) },
+                height = 48.dp, horizontalPadding = 20.dp,
+                surface = if (selected.isEmpty()) c.glass else Candy.Sky,
+                label = stringResource(R.string.ai_pick_add, selected.size),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    stringResource(R.string.ai_pick_add, selected.size),
+                    style = ClearType.BodyStrong,
+                    color = if (selected.isEmpty()) c.inkSoft else androidx.compose.ui.graphics.Color.White,
+                )
+            }
+        }
+    }
+}
+
+/** Satu baris berkas di halaman pemilih: ikon jenis, nama, kapan dan ukuran, lingkaran centang. */
+@Composable
+private fun PickerRow(row: FileRow, ticked: Boolean, onToggle: () -> Unit) {
+    val c = clear
+    val kind = DocumentTypes.kindOf(row.name)
+    Row(
+        Modifier.fillMaxWidth()
+            .background(if (ticked) Candy.Sky.copy(alpha = 0.14f) else androidx.compose.ui.graphics.Color.Transparent)
+            .pressable(onToggle)
+            .padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(RoundedRectangle(10.dp)).background(c.capsule),
+            contentAlignment = Alignment.Center,
+        ) { GlassIcon(kind.icon, null, Modifier.size(20.dp), tint = c.inkSoft) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(displayName(row.name), style = ClearType.BodyStrong, color = c.ink, maxLines = 2)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                listOfNotNull(whenLabel(row.date), row.size.takeIf { it > 0 }?.let { formatSize(it) }).joinToString("  ·  "),
+                style = ClearType.Caption, color = c.inkSoft, maxLines = 1,
+            )
+        }
+        if (row.starred) {
+            GlassIcon(LucideIcons.Star, null, Modifier.size(16.dp), tint = Candy.Lemon)
+            Spacer(Modifier.width(6.dp))
+        }
+        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(24.dp).clip(CircleShape)
+                    .background(if (ticked) Candy.Sky else androidx.compose.ui.graphics.Color.Transparent)
+                    .border(2.dp, if (ticked) Candy.Sky else c.inkFaint, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (ticked) GlassIcon(LucideIcons.Check, null, Modifier.size(14.dp), tint = androidx.compose.ui.graphics.Color.White)
+            }
         }
     }
 }

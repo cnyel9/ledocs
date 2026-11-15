@@ -1644,4 +1644,19 @@
     <string name="ai_ask_this_doc">Tanya Dokumen Ini</string>
     <string name="ai_new_chat">Obrolan baru</string>
     <string name="ai_thinking">Sedang menjawab…</string>
+    <string name="ai_pick_title_context">Pilih dokumen konteks</string>
+    <string name="ai_pick_title_ref">Pilih dokumen pedoman</string>
+    <string name="ai_pick_add">Tambahkan %1$d dokumen</string>
+    <string name="ai_pick_empty">Tidak ada berkas yang bisa dipilih di sini.</string>
+    <string name="ai_ref_button">Tambah pedoman atau referensi</string>
+    <string name="ai_ref_title">Jadikan pedoman</string>
+    <string name="ai_ref_doc">Dokumen pedoman</string>
+    <string name="ai_ref_doc_body">Gaya, struktur, dan formatnya diikuti AI</string>
+    <string name="ai_ref_image">Gambar referensi</string>
+    <string name="ai_ref_image_body">Acuan visual untuk model yang bisa melihat gambar</string>
+    <string name="ai_ref_chip_doc">Pedoman</string>
+    <string name="ai_ref_chip_image">Gambar</string>
+    <string name="ai_ref_no_vision">Model aktif sudah teruji dan tidak mendukung gambar, jadi gambar tidak dilampirkan. Ganti model yang mendukung gambar, atau jalankan Uji Kemampuan di Pengaturan, Asisten AI.</string>
+    <string name="ai_guide_title">Yang saya pahami dari pedoman</string>
+    <string name="ai_guide_hint">Koreksi lewat pesan bila ada yang meleset.</string>
 </resources>
